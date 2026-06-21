@@ -83,7 +83,7 @@ export function TechnicalCopilot({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-border/80 bg-card shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border bg-[linear-gradient(135deg,rgba(14,165,233,0.16),rgba(14,165,233,0.03)_45%,rgba(19,20,26,0.96)_100%)] px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">

@@ -5,15 +5,14 @@ services:
       dockerfile: apps/api/Dockerfile
     working_dir: /app
     env_file:
-      - apps/api/.env.example
+      - apps/api/.env
     environment:
-      LOCAL_RAG_DOC_PATH: /streamlit-docs/sta.md
-      GOVERNANCE_LOG_DIR: /streamlit-data/sta_logs_fake
       GOVERNANCE_REPORT_DIR: /tmp/reports
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     volumes:
       - ./apps/api:/app
-      - ./apps/streamlit/docs:/streamlit-docs:ro
-      - ./apps/streamlit/data:/streamlit-data:ro
     ports:
       - "8000:8000"
 
@@ -23,7 +22,7 @@ services:
       dockerfile: apps/web/Dockerfile
     working_dir: /app
     env_file:
-      - apps/web/.env.example
+      - apps/web/.env
     environment:
       VITE_API_PROXY_TARGET: http://api:8000
     volumes:

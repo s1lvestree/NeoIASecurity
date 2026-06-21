@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 from urllib.parse import urlparse
@@ -7,6 +8,8 @@ from uuid import uuid4
 
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 from ..config import Settings
 from ..schemas import ChatResponse
@@ -66,7 +69,8 @@ class ChatService:
             try:
                 answer = self._call_bedrock(question, combined_context)
                 mode = "bedrock"
-            except ClientError:
+            except Exception as exc:
+                logger.warning("Bedrock falhou, usando fallback: %s", exc)
                 mode = "fallback"
 
         references = []
@@ -191,23 +195,49 @@ class ChatService:
             parts.append(f"### CONTEXTO PÚBLICO\n{public_context}")
         return "\n\n".join(parts)[: self.settings.combined_context_max_chars], local_sources, public_sources
 
-    def _call_bedrock(self, question: str, combined_context: str) -> str:
-        if boto3 is None:
-            raise RuntimeError("boto3 não está disponível no ambiente.")
-        client = boto3.client("bedrock-runtime", region_name=self.settings.aws_region)
+    def _build_bedrock_payload(self, question: str, combined_context: str) -> dict:
         supplied_context = combined_context or "Nenhum contexto local ou público relevante foi recuperado."
         final_prompt = (
             "Responda apenas com base no contexto fornecido. "
             f'Se o contexto não for suficiente, responda exatamente: "{INSUFFICIENT_CONTEXT_ANSWER}".\n\n'
             f"Contexto:\n{supplied_context}\n\nPergunta:\n{question}"
         )
-        response = client.converse(
-            modelId=self.settings.bedrock_model_id,
-            system=[{"text": SYSTEM_CONTEXT}],
-            messages=[{"role": "user", "content": [{"text": final_prompt}]}],
-            inferenceConfig={"maxTokens": 1200, "temperature": 0.1, "topP": 0.9},
-        )
+        return {
+            "system": [{"text": SYSTEM_CONTEXT}],
+            "messages": [{"role": "user", "content": [{"text": final_prompt}]}],
+            "inferenceConfig": {"maxTokens": 1200, "temperature": 0.1, "topP": 0.9},
+        }
+
+    def _call_bedrock(self, question: str, combined_context: str) -> str:
+        if self.settings.aws_bearer_token_bedrock:
+            return self._call_bedrock_bearer(question, combined_context)
+
+        if boto3 is None:
+            raise RuntimeError("boto3 não está disponível no ambiente.")
+        payload = self._build_bedrock_payload(question, combined_context)
+        client = boto3.client("bedrock-runtime", region_name=self.settings.aws_region)
+        response = client.converse(modelId=self.settings.bedrock_model_id, **payload)
         return response["output"]["message"]["content"][0]["text"]
+
+    def _call_bedrock_bearer(self, question: str, combined_context: str) -> str:
+        payload = self._build_bedrock_payload(question, combined_context)
+        url = (
+            f"https://bedrock-runtime.{self.settings.aws_region}.amazonaws.com"
+            f"/model/{self.settings.bedrock_model_id}/converse"
+        )
+        response = requests.post(
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {self.settings.aws_bearer_token_bedrock}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+        if not response.ok:
+            logger.error("Bedrock bearer HTTP %s: %s", response.status_code, response.text[:500])
+        response.raise_for_status()
+        return response.json()["output"]["message"]["content"][0]["text"]
 
     def _build_fallback_answer(self, question: str, combined_context: str) -> str:
         if not combined_context.strip():

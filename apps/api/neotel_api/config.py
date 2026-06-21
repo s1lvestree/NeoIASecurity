@@ -19,8 +19,9 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 API_ROOT = Path(__file__).resolve().parents[1]
+_parents = Path(__file__).resolve().parents
+REPO_ROOT = _parents[3] if len(_parents) > 3 else API_ROOT
 load_dotenv(REPO_ROOT / ".env")
 load_dotenv(API_ROOT / ".env")
 
@@ -35,6 +36,7 @@ def _resolve_path(raw_path: str) -> Path:
 @dataclass(slots=True)
 class Settings:
     aws_region: str
+    aws_bearer_token_bedrock: str
     bedrock_enabled: bool
     bedrock_model_id: str
     bedrock_fallback_model_id: str
@@ -83,6 +85,7 @@ def get_settings() -> Settings:
 
     return Settings(
         aws_region=os.getenv("AWS_REGION", "us-east-1"),
+        aws_bearer_token_bedrock=os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip(),
         bedrock_enabled=env_bool("BEDROCK_ENABLED", False),
         bedrock_model_id=os.getenv("BEDROCK_MODEL_ID", "amazon.nova-pro-v1:0"),
         bedrock_fallback_model_id=os.getenv("BEDROCK_FALLBACK_MODEL_ID", "amazon.nova-pro-v1:0"),
