@@ -1,0 +1,13 @@
+.git
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+node_modules
+dist
+api.out.log
+api.err.log
+web.out.log
+web.err.log

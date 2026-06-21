@@ -1,0 +1,56 @@
+import { loadEnv } from 'vite'
+import { defineConfig } from 'vitest/config'
+import path from 'path'
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+
+function figmaAssetResolver() {
+  return {
+    name: 'figma-asset-resolver',
+    resolveId(id: string) {
+      if (id.startsWith('figma:asset/')) {
+        const filename = id.replace('figma:asset/', '')
+        return path.resolve(__dirname, 'src/assets', filename)
+      }
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000'
+
+  return {
+    plugins: [
+      figmaAssetResolver(),
+      // The React and Tailwind plugins are both required for Make, even if
+      // Tailwind is not being actively used - do not remove them
+      react(),
+      tailwindcss(),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
+    },
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+        '/health': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: './src/test/setup.ts',
+    },
+    assetsInclude: ['**/*.svg', '**/*.csv'],
+  }
+})

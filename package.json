@@ -1,0 +1,12 @@
+{
+  "name": "neoia-security-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "python apps/api/main.py",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build:web": "npm --prefix apps/web run build"
+  }
+}

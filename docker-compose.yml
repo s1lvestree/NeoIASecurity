@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    working_dir: /app
+    env_file:
+      - apps/api/.env.example
+    environment:
+      LOCAL_RAG_DOC_PATH: /streamlit-docs/sta.md
+      GOVERNANCE_LOG_DIR: /streamlit-data/sta_logs_fake
+      GOVERNANCE_REPORT_DIR: /tmp/reports
+    volumes:
+      - ./apps/api:/app
+      - ./apps/streamlit/docs:/streamlit-docs:ro
+      - ./apps/streamlit/data:/streamlit-data:ro
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    working_dir: /app
+    env_file:
+      - apps/web/.env.example
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
