@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Search, Trash2 } from 'lucide-react';
+import { MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, Trash2 } from 'lucide-react';
 import type { ChatConversation } from '../types/chat';
 import {
   AlertDialog,
@@ -20,6 +20,8 @@ interface ChatHistoryProps {
   onNewConversation: () => void;
   onSelectConversation: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string) => void;
+  isCollapsed: boolean;
+  onToggle: () => void;
 }
 
 function getDateLabel(value: string) {
@@ -49,6 +51,8 @@ export function ChatHistory({
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  isCollapsed,
+  onToggle,
 }: ChatHistoryProps) {
   const groups = conversations.reduce<Record<string, ChatConversation[]>>((result, conversation) => {
     const label = getDateLabel(conversation.updatedAt);
@@ -57,20 +61,63 @@ export function ChatHistory({
     return result;
   }, {});
 
-  return (
-    <aside className="hidden h-full w-80 flex-shrink-0 border-r border-border bg-sidebar md:flex md:flex-col">
-      <div className="border-b border-border p-4">
+  if (isCollapsed) {
+    return (
+      <aside className="hidden h-full w-14 flex-shrink-0 flex-col items-center border-r border-border bg-sidebar py-3 md:flex">
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Expandir histórico"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <PanelLeftOpen className="h-5 w-5" />
+        </button>
         <button
           type="button"
           onClick={onNewConversation}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-primary-foreground transition-colors hover:bg-primary/90"
+          title="Nova conversa"
+          className="mt-1 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          title="Histórico de conversas"
+          onClick={onToggle}
+          className="mt-1 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <MessageSquare className="h-5 w-5" />
+        </button>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="hidden h-full w-72 flex-shrink-0 flex-col border-r border-border bg-sidebar md:flex">
+      <div className="flex items-center gap-2 border-b border-border p-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Recolher histórico"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <PanelLeftClose className="h-5 w-5" />
+        </button>
+        <span className="text-sm font-medium text-sidebar-foreground">Conversas</span>
+      </div>
+
+      <div className="border-b border-border p-3">
+        <button
+          type="button"
+          onClick={onNewConversation}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
           <span className="text-sm font-medium">Nova conversa</span>
         </button>
       </div>
 
-      <div className="border-b border-border p-4">
+      <div className="border-b border-border p-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -177,7 +224,7 @@ export function ChatHistory({
         )}
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-3">
         <div className="rounded-2xl border border-border bg-muted/20 p-3">
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Armazenamento</p>
           <p className="mt-2 text-sm font-medium text-sidebar-foreground">Historico local</p>

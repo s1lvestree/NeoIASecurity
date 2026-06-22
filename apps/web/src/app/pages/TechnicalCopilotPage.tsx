@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { ChatHistory } from '../components/ChatHistory';
 import { TechnicalCopilot } from '../components/TechnicalCopilot';
 import { useTechnicalCopilotChat } from '../hooks/useTechnicalCopilotChat';
 
 export function TechnicalCopilotPage() {
   const copilot = useTechnicalCopilotChat();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   return (
     <div className="flex h-full min-h-0 bg-background">
@@ -15,6 +17,8 @@ export function TechnicalCopilotPage() {
         onNewConversation={copilot.startNewConversation}
         onSelectConversation={copilot.selectConversation}
         onDeleteConversation={copilot.deleteConversation}
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((v) => !v)}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

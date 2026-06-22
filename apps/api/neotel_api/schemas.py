@@ -72,6 +72,7 @@ class GovernancePreviewRow(BaseModel):
     accessState: str
     authResult: str
     riskSignal: str
+    source_ip: str = ""
 
 
 class GovernancePreviewResponse(BaseModel):
@@ -80,6 +81,8 @@ class GovernancePreviewResponse(BaseModel):
     preview_rows: list[GovernancePreviewRow]
     recommendations: list[dict]
     privacy_issues: list[str]
+    risk_score: int = 0
+    events_per_day: dict = Field(default_factory=dict)
 
 
 class GovernanceReportResponse(BaseModel):
