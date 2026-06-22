@@ -76,7 +76,7 @@ export function GovernanceAI() {
   }));
 
   return (
-    <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div className="px-6 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -131,6 +131,7 @@ export function GovernanceAI() {
                       border: '1px solid #1f2937',
                       borderRadius: '8px',
                       fontSize: '12px',
+                      color: '#e8e9ed',
                     }}
                   />
                   <Area
@@ -165,6 +166,7 @@ export function GovernanceAI() {
                       border: '1px solid #1f2937',
                       borderRadius: '8px',
                       fontSize: '12px',
+                      color: '#e8e9ed',
                     }}
                   />
                   <Line

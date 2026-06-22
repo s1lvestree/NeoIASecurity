@@ -41,9 +41,9 @@ function formatTime(value: string) {
 }
 
 const apiStatusContent = {
-  checking: { label: 'Verificando API', color: 'text-amber-300', Icon: LoaderCircle },
+  checking: { label: 'Verificando API', color: 'text-amber-500', Icon: LoaderCircle },
   online: { label: 'API conectada', color: 'text-emerald-400', Icon: CheckCircle2 },
-  offline: { label: 'API indisponivel', color: 'text-red-300', Icon: WifiOff },
+  offline: { label: 'API indisponivel', color: 'text-red-500', Icon: WifiOff },
 };
 
 export function TechnicalCopilot({
@@ -118,7 +118,7 @@ export function TechnicalCopilot({
             void handleSubmit();
           }}
         >
-          <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
+          <div className="rounded-3xl border border-border bg-card p-4 shadow-md">
             <textarea
               ref={editorRef}
               value={draft}
@@ -181,7 +181,7 @@ export function TechnicalCopilot({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_32%),linear-gradient(180deg,rgba(10,10,15,0.98),rgba(19,20,26,1))] p-6">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-background p-6">
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
@@ -212,7 +212,7 @@ export function TechnicalCopilot({
                     </span>
                   )}
                   {message.deliveryStatus === 'pending' && (
-                    <span className="flex items-center gap-1 text-amber-300">
+                    <span className="flex items-center gap-1 text-amber-500">
                       <LoaderCircle className="h-3 w-3 animate-spin" /> Enviando
                     </span>
                   )}
@@ -222,7 +222,7 @@ export function TechnicalCopilot({
                     type="button"
                     onClick={() => void onRetry(message.id)}
                     disabled={isSubmitting}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-2 py-1 text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg border border-red-800 px-2 py-1 text-red-400 hover:bg-red-950/60 disabled:opacity-50"
                   >
                     <RefreshCw className="h-3 w-3" /> Tentar novamente
                   </button>
@@ -233,12 +233,12 @@ export function TechnicalCopilot({
         ))}
 
         {error && (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
+          <div className="rounded-3xl border border-red-800 bg-red-950/60 p-5">
             <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-300" />
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-red-100">Nao foi possivel concluir a acao</p>
-                <p className="mt-1 text-sm leading-6 text-red-100/80">{error}</p>
+                <p className="text-sm font-medium text-red-400">Nao foi possivel concluir a acao</p>
+                <p className="mt-1 text-sm leading-6 text-red-400/80">{error}</p>
               </div>
             </div>
           </div>
@@ -246,7 +246,7 @@ export function TechnicalCopilot({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="shrink-0 border-t border-border bg-card/70 p-4 backdrop-blur-sm">
+      <div className="shrink-0 border-t border-border bg-background p-4">
         <form
           className="mx-auto max-w-2xl"
           onSubmit={(event) => {
@@ -254,7 +254,7 @@ export function TechnicalCopilot({
             void handleSubmit();
           }}
         >
-          <div className="rounded-3xl border border-border bg-card p-4">
+          <div className="rounded-3xl border border-border bg-card p-4 shadow-md">
             <textarea
               ref={editorRef}
               value={draft}

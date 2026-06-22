@@ -1,24 +1,24 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router';
 import { Sidebar } from './components/Sidebar';
-import { Header } from './components/Header';
+import { HomePage } from './pages/HomePage';
 import { Dashboard } from './pages/Dashboard';
 import { TechnicalCopilotPage } from './pages/TechnicalCopilotPage';
 import { GovernancePage } from './pages/GovernancePage';
 
 function AppContent() {
   const location = useLocation();
-  const showHeader = location.pathname === '/';
   const isFullHeight = location.pathname === '/technical';
+  const isHome = location.pathname === '/';
 
   return (
-    <div className="size-full flex bg-background dark">
+    <div className="size-full flex bg-background">
       <Sidebar />
 
       <main className={`min-h-0 min-w-0 flex-1 ${isFullHeight ? 'overflow-hidden' : 'overflow-auto'}`}>
-        {showHeader && <Header />}
-        <div className={isFullHeight ? "h-full min-h-0" : (showHeader ? "p-8" : "")}>
+        <div className={isFullHeight ? 'h-full min-h-0' : isHome ? '' : 'p-8'}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/technical" element={<TechnicalCopilotPage />} />
             <Route path="/governance" element={<GovernancePage />} />
             <Route path="/settings" element={
