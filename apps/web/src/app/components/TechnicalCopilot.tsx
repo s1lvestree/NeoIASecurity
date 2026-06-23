@@ -14,6 +14,8 @@ import {
   Trash2,
   WifiOff,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { quickActions, suggestedPrompts } from '../data/technicalCopilotMock';
 import type { ApiHealthStatus, ChatMessage } from '../types/chat';
 import { ticketService, type TicketResponse } from '../services/ticketService';
@@ -287,7 +289,13 @@ export function TechnicalCopilot({
                   : 'border border-border/80 bg-card/90'
               } ${message.deliveryStatus === 'failed' ? 'border-red-500/40' : ''}`}
             >
-              <p className="whitespace-pre-line text-sm leading-6 text-foreground">{message.content}</p>
+              {message.role === 'assistant' ? (
+                <div className="prose prose-invert max-w-none text-sm leading-6 text-foreground prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-strong:text-foreground prose-pre:overflow-x-auto prose-pre:rounded-xl prose-pre:bg-muted/40 prose-pre:p-3 prose-code:text-foreground">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="whitespace-pre-line text-sm leading-6 text-foreground">{message.content}</p>
+              )}
 
               {message.references && message.references.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-border/50 pt-4">
