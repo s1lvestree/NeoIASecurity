@@ -5,11 +5,16 @@ import { Activity, FileText, Headphones, Shield, TrendingUp, Users, AlertTriangl
 export function Dashboard() {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Visão Geral</h2>
-        <p className="text-muted-foreground">
-          Status em tempo real das operações de segurança e plataforma de IA
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground mb-1">Visão Geral</h2>
+          <p className="text-sm text-muted-foreground">
+            Status em tempo real das operações de segurança e plataforma de IA
+          </p>
+        </div>
+        <span className="text-xs text-muted-foreground bg-card border border-border rounded-lg px-3 py-2 shadow-sm">
+          Atualizado agora
+        </span>
       </div>
 
       <div className="grid grid-cols-4 gap-4">
@@ -45,7 +50,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-4">Atividades Recentes</h3>
             <div className="space-y-4">
               <div className="flex items-start gap-4 pb-4 border-b border-border">
@@ -110,24 +115,24 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-4">Performance do Sistema</h3>
             <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-muted/20 rounded-lg">
+              <div className="text-center p-4 bg-muted/40 rounded-lg border border-border">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <TrendingUp className="w-4 h-4 text-primary" />
                   <span className="text-xs text-muted-foreground">Resposta Média</span>
                 </div>
                 <p className="text-xl font-bold text-foreground">2,3s</p>
               </div>
-              <div className="text-center p-4 bg-muted/20 rounded-lg">
+              <div className="text-center p-4 bg-muted/40 rounded-lg border border-border">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <Activity className="w-4 h-4 text-primary" />
                   <span className="text-xs text-muted-foreground">Disponibilidade</span>
                 </div>
                 <p className="text-xl font-bold text-foreground">99,8%</p>
               </div>
-              <div className="text-center p-4 bg-muted/20 rounded-lg">
+              <div className="text-center p-4 bg-muted/40 rounded-lg border border-border">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <Users className="w-4 h-4 text-primary" />
                   <span className="text-xs text-muted-foreground">Usuários Ativos</span>
@@ -140,7 +145,7 @@ export function Dashboard() {
 
         <div className="space-y-6">
           <IntegrationStatus />
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-foreground mb-4">Fila de Processamento</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">

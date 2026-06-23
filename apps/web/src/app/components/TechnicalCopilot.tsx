@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowUp,
   CheckCircle2,
   Database,
   FileText,
@@ -8,7 +9,6 @@ import {
   LoaderCircle,
   Lock,
   RefreshCw,
-  Send,
   Shield,
   Sparkles,
   Trash2,
@@ -46,9 +46,9 @@ function formatTime(value: string) {
 }
 
 const apiStatusContent = {
-  checking: { label: 'Verificando API', color: 'text-amber-300', Icon: LoaderCircle },
+  checking: { label: 'Verificando API', color: 'text-amber-500', Icon: LoaderCircle },
   online: { label: 'API conectada', color: 'text-emerald-400', Icon: CheckCircle2 },
-  offline: { label: 'API indisponivel', color: 'text-red-300', Icon: WifiOff },
+  offline: { label: 'API indisponivel', color: 'text-red-500', Icon: WifiOff },
 };
 
 interface TicketError {
@@ -146,10 +146,116 @@ export function TechnicalCopilot({
     }
   };
 
+  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    if (error) onClearError();
+    setDraft(event.target.value);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void handleSubmit();
+    }
+  };
+
+  const isWelcome = messages.length === 0 && !error;
+
+  if (isWelcome) {
+    return (
+      <div className="relative flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-10">
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClearConversation}
+            className="flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Limpar conversa
+          </button>
+          <div className={`flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1.5 text-xs font-medium ${status.color}`}>
+            <StatusIcon className={`h-3 w-3 ${apiStatus === 'checking' ? 'animate-spin' : ''}`} />
+            {status.label}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <h1 className="text-2xl font-semibold text-foreground">O que posso te ajudar?</h1>
+        </div>
+
+        <form
+          className="mt-6 w-full max-w-2xl"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSubmit();
+          }}
+        >
+          <div className="rounded-3xl border border-border bg-card p-4 shadow-md">
+            <textarea
+              ref={editorRef}
+              value={draft}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              rows={3}
+              placeholder="Pergunte sobre STA, DLP, SIEM, IAM/PAM ou troubleshooting."
+              aria-label="Mensagem para o Copiloto"
+              className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {quickActions.map((action) => {
+                  const Icon = quickActionIcons[action.id as keyof typeof quickActionIcons];
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => preparePrompt(action.prompt)}
+                      className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs transition-colors hover:bg-muted/70"
+                    >
+                      <Icon className={`h-3.5 w-3.5 ${action.accentClassName}`} />
+                      <span className="text-foreground/90">{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="submit"
+                aria-label="Enviar mensagem"
+                disabled={isSubmitting || !draft.trim()}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div className="mt-4 grid w-full max-w-2xl grid-cols-1 gap-3 md:grid-cols-3">
+          {suggestedPrompts.map((prompt) => (
+            <button
+              key={prompt.id}
+              type="button"
+              onClick={() => preparePrompt(`${prompt.title}: ${prompt.description}`)}
+              className="rounded-2xl border border-border bg-card/60 p-4 text-left transition-colors hover:border-primary/30 hover:bg-card/80"
+            >
+              <p className="text-sm font-medium text-foreground">{prompt.title}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{prompt.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border bg-[linear-gradient(135deg,rgba(14,165,233,0.16),rgba(14,165,233,0.03)_45%,rgba(19,20,26,0.96)_100%)] px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
+      <div className="shrink-0 border-b border-border bg-background px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -161,36 +267,17 @@ export function TechnicalCopilot({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onClearConversation} className="flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
-              <Trash2 className="h-3.5 w-3.5" /> Limpar conversa
-            </button>
-            <div className={`flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium ${status.color}`}>
-              <StatusIcon className={`h-3.5 w-3.5 ${apiStatus === 'checking' ? 'animate-spin' : ''}`} />
-              {status.label}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={onClearConversation}
+            className="flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Limpar conversa
+          </button>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.08),transparent_32%),linear-gradient(180deg,rgba(10,10,15,0.98),rgba(19,20,26,1))] p-6">
-        {messages.length === 0 && (
-          <div className="rounded-[28px] border border-border/80 bg-card/85 p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
-                <Sparkles className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Inicie uma nova analise</p>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Envie uma pergunta sobre STA, DLP, SIEM ou IAM/PAM. A conversa sera salva
-                  localmente depois do primeiro envio.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-background p-6">
         {messages.map((message, messageIndex) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
@@ -279,7 +366,7 @@ export function TechnicalCopilot({
                   )}
                   {message.mode === 'bedrock' && <span className="rounded-full border border-border px-2 py-0.5">Bedrock</span>}
                   {message.deliveryStatus === 'pending' && (
-                    <span className="flex items-center gap-1 text-amber-300">
+                    <span className="flex items-center gap-1 text-amber-500">
                       <LoaderCircle className="h-3 w-3 animate-spin" /> Enviando
                     </span>
                   )}
@@ -289,7 +376,7 @@ export function TechnicalCopilot({
                     type="button"
                     onClick={() => void onRetry(message.id)}
                     disabled={isSubmitting}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-2 py-1 text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg border border-red-800 px-2 py-1 text-red-400 hover:bg-red-950/60 disabled:opacity-50"
                   >
                     <RefreshCw className="h-3 w-3" /> Tentar novamente
                   </button>
@@ -300,12 +387,12 @@ export function TechnicalCopilot({
         ))}
 
         {error && (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
+          <div className="rounded-3xl border border-red-800 bg-red-950/60 p-5">
             <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-300" />
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
               <div>
-                <p className="text-sm font-medium text-red-100">Nao foi possivel concluir a acao</p>
-                <p className="mt-1 text-sm leading-6 text-red-100/80">{error}</p>
+                <p className="text-sm font-medium text-red-400">Nao foi possivel concluir a acao</p>
+                <p className="mt-1 text-sm leading-6 text-red-400/80">{error}</p>
               </div>
             </div>
           </div>
@@ -313,73 +400,62 @@ export function TechnicalCopilot({
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="shrink-0 border-t border-border bg-card/70 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex flex-wrap gap-2">
-          {quickActions.map((action) => {
-            const Icon = quickActionIcons[action.id as keyof typeof quickActionIcons];
-            return (
-              <button
-                key={action.id}
-                type="button"
-                onClick={() => preparePrompt(action.prompt)}
-                className="flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-2 text-xs transition-colors hover:bg-muted/70"
-              >
-                <Icon className={`h-4 w-4 ${action.accentClassName}`} />
-                <span className="text-foreground/90">{action.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          {suggestedPrompts.map((prompt) => (
-            <button
-              key={prompt.id}
-              type="button"
-              onClick={() => preparePrompt(`${prompt.title}: ${prompt.description}`)}
-              className="rounded-2xl border border-border bg-background/60 p-4 text-left transition-colors hover:border-primary/30 hover:bg-background/80"
-            >
-              <p className="text-sm font-medium text-foreground">{prompt.title}</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">{prompt.description}</p>
-            </button>
-          ))}
-        </div>
-
+      <div className="shrink-0 border-t border-border bg-background p-4">
         <form
-          className="flex gap-3"
+          className="mx-auto max-w-2xl"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();
           }}
         >
-          <div className="flex-1 rounded-2xl border border-border bg-background/65 px-4 py-3">
+          <div className="rounded-3xl border border-border bg-card p-4 shadow-md">
             <textarea
               ref={editorRef}
               value={draft}
-              onChange={(event) => {
-                if (error) onClearError();
-                setDraft(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void handleSubmit();
-                }
-              }}
-              rows={3}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              rows={2}
               placeholder="Pergunte sobre STA, DLP, SIEM, IAM/PAM ou troubleshooting."
               aria-label="Mensagem para o Copiloto"
               className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
             />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {quickActions.map((action) => {
+                  const Icon = quickActionIcons[action.id as keyof typeof quickActionIcons];
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => preparePrompt(action.prompt)}
+                      className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs transition-colors hover:bg-muted/70"
+                    >
+                      <Icon className={`h-3.5 w-3.5 ${action.accentClassName}`} />
+                      <span className="text-foreground/90">{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                <div className={`flex items-center gap-1.5 text-xs font-medium ${status.color}`}>
+                  <StatusIcon className={`h-3 w-3 ${apiStatus === 'checking' ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{status.label}</span>
+                </div>
+                <button
+                  type="submit"
+                  aria-label="Enviar mensagem"
+                  disabled={isSubmitting || !draft.trim()}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            type="submit"
-            aria-label="Enviar mensagem"
-            disabled={isSubmitting || !draft.trim()}
-            className="flex items-center justify-center rounded-2xl bg-primary px-5 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
         </form>
       </div>
     </div>

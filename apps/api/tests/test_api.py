@@ -305,5 +305,5 @@ def test_governance_report_endpoint_returns_markdown(monkeypatch, tmp_path: Path
     assert response.status_code == 200
     body = response.json()
     assert "Relatório Executivo de Governança" in body["report_markdown"]
-    assert body["mode"] == "fallback"
+    assert body["mode"] == "fake_sta"
     assert body["privacy_issues"] == []

@@ -9,7 +9,7 @@ const integrations = [
 
 export function IntegrationStatus() {
   return (
-    <div className="bg-card border border-border rounded-xl p-6">
+    <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
       <h3 className="text-sm font-semibold text-foreground mb-4">Integrações do Sistema</h3>
       <div className="space-y-3">
         {integrations.map((integration) => (
@@ -18,7 +18,7 @@ export function IntegrationStatus() {
               {integration.status === 'connected' ? (
                 <CheckCircle2 className="w-4 h-4 text-primary" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-muted-foreground" />
+                <AlertCircle className="w-4 h-4 text-amber-500" />
               )}
               <div>
                 <p className="text-sm text-foreground">{integration.name}</p>
