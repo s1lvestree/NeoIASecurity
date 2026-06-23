@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { GovernancePreview, GovernanceReport } from '../types/governance';
+import type { GovernancePreview, GovernanceReport, GovernanceReportJob } from '../types/governance';
 import { governanceService } from '../services/governanceService';
 
 interface GovernanceState {
@@ -7,6 +7,7 @@ interface GovernanceState {
   loading: boolean;
   error: string | null;
   fetchReport: () => Promise<GovernanceReport | null>;
+  createReport: (solution: 'STA', days: number) => Promise<GovernanceReportJob | null>;
   refresh: () => void;
 }
 
@@ -41,5 +42,14 @@ export function useGovernance(days = 7, eventsPerDay = 50): GovernanceState {
     }
   }, [days, eventsPerDay]);
 
-  return { preview, loading, error, fetchReport, refresh: load };
+  const createReport = useCallback(async (solution: 'STA', reportDays: number): Promise<GovernanceReportJob | null> => {
+    try {
+      return await governanceService.createReport(solution, reportDays);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao gerar relatório PDF.');
+      throw err;
+    }
+  }, []);
+
+  return { preview, loading, error, fetchReport, createReport, refresh: load };
 }

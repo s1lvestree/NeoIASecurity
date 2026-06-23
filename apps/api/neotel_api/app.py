@@ -5,11 +5,13 @@ import logging
 
 import requests
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .schemas import (
     ChatRequest,
+    GovernanceReportRequest,
     GovernanceRequest,
     TicketFromChatRequest,
     TicketTestRequest,
@@ -39,6 +41,14 @@ def create_app() -> FastAPI:
     async def health() -> dict:
         local_doc_exists = settings.local_rag_doc_path.is_file()
         local_doc_size = settings.local_rag_doc_path.stat().st_size if local_doc_exists else 0
+        governance_health = {
+            "governance_enabled": True,
+            "fake_sta_logs_available": governance_service.fake_logs_available(),
+            "report_generation_available": governance_service.report_generation_available(),
+            "report_output_dir": str(settings.governance_report_dir),
+            "privacy_mode": settings.governance_privacy_mode,
+            "report_dir": str(settings.governance_report_dir),
+        }
         return {
             "status": "ok",
             "bedrock_enabled": settings.bedrock_enabled,
@@ -49,7 +59,9 @@ def create_app() -> FastAPI:
             "local_doc_exists": local_doc_exists,
             "local_doc_size_bytes": local_doc_size,
             "public_doc_lookup_enabled": settings.public_doc_lookup_enabled,
+            "public_doc_urls_count": len(settings.public_doc_urls),
             "public_doc_timeout_seconds": settings.public_doc_timeout_seconds,
+            "last_public_doc_error": chat_service.last_public_doc_error,
             "ticket_mode": settings.ticket_api_mode,
             "tickets": {
                 "mode": settings.ticket_api_mode,
@@ -60,6 +72,7 @@ def create_app() -> FastAPI:
                 "zammad_customer_email": settings.zammad_customer_email,
                 "email_enabled": settings.email_enabled,
             },
+            "governance": governance_health,
             "last_bedrock_error": chat_service.last_bedrock_error,
             "services": {
                 "chat": {
@@ -71,7 +84,9 @@ def create_app() -> FastAPI:
                     "local_doc_exists": local_doc_exists,
                     "local_doc_size_bytes": local_doc_size,
                     "public_doc_lookup_enabled": settings.public_doc_lookup_enabled,
+                    "public_doc_urls_count": len(settings.public_doc_urls),
                     "public_doc_timeout_seconds": settings.public_doc_timeout_seconds,
+                    "last_public_doc_error": chat_service.last_public_doc_error,
                     "last_bedrock_error": chat_service.last_bedrock_error,
                 },
                 "tickets": {
@@ -83,10 +98,7 @@ def create_app() -> FastAPI:
                     "zammad_customer_email": settings.zammad_customer_email,
                     "email_enabled": settings.email_enabled,
                 },
-                "governance": {
-                    "privacy_mode": settings.governance_privacy_mode,
-                    "report_dir": str(settings.governance_report_dir),
-                },
+                "governance": governance_health,
             },
         }
 
@@ -200,6 +212,36 @@ def create_app() -> FastAPI:
             days=request.days,
             events_per_day=request.events_per_day,
         ).model_dump()
+
+    @api.get("/api/governance/sta/summary")
+    async def governance_sta_summary(days: int = Query(default=7, ge=1, le=90)) -> dict:
+        return governance_service.build_summary(days=days)
+
+    @api.post("/api/governance/reports")
+    async def create_governance_report(request: GovernanceReportRequest) -> dict:
+        try:
+            return governance_service.create_pdf_report(solution=request.solution, days=request.days)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @api.get("/api/governance/reports/{report_id}/download")
+    async def download_governance_report(report_id: str):
+        report_path = governance_service.report_path(report_id)
+        if not report_path or not report_path.is_file():
+            raise HTTPException(status_code=404, detail="Relatório não encontrado.")
+        filename = governance_service.report_filename(report_id)
+        return FileResponse(
+            path=report_path,
+            media_type="application/pdf",
+            filename=filename,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @api.get("/api/governance/debug/sta")
+    async def governance_sta_debug(days: int = Query(default=7, ge=1, le=90)) -> dict:
+        return governance_service.debug_sta(days=days)
 
     return api
 

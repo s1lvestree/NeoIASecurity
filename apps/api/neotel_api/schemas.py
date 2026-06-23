@@ -72,6 +72,11 @@ class GovernanceRequest(BaseModel):
     events_per_day: int = Field(default=50, ge=5, le=500)
 
 
+class GovernanceReportRequest(BaseModel):
+    solution: Literal["STA"] = "STA"
+    days: int = Field(default=7, ge=1, le=90)
+
+
 class GovernancePreviewRow(BaseModel):
     timestamp: str
     principalId: str

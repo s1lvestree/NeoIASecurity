@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from neotel_api.config import clean_env_value, get_settings, resolve_local_doc_path
 from neotel_api.app import create_app
+from neotel_api.services.chat import clean_model_answer
 
 
 def build_client(monkeypatch, tmp_path: Path) -> TestClient:
@@ -43,6 +44,69 @@ def test_health_endpoint_reports_services(monkeypatch, tmp_path: Path) -> None:
     assert body["configured_local_doc_path"] == str(tmp_path / "sta.md")
     assert body["resolved_local_doc_path"] == str(tmp_path / "sta.md")
     assert body["public_doc_timeout_seconds"] == 5
+    governance = body["services"]["governance"]
+    assert governance["governance_enabled"] is True
+    assert governance["fake_sta_logs_available"] is True
+    assert governance["report_generation_available"] is True
+    assert governance["privacy_mode"] is True
+    assert governance["report_output_dir"] == str(tmp_path / "reports")
+
+
+def test_governance_sta_summary_uses_sanitized_fake_data(monkeypatch, tmp_path: Path) -> None:
+    client = build_client(monkeypatch, tmp_path)
+
+    response = client.get("/api/governance/sta/summary", params={"days": 7})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["solution"] == "STA"
+    assert body["days"] == 7
+    assert body["total_events"] > 0
+    assert body["recent_events"]
+    sample = body["recent_events"][0]
+    assert sample["user"].startswith("user-")
+    assert "x.x" in sample["source_ip"]
+    assert "tenant_id" not in sample
+    assert "account_id" not in sample
+    assert "session_id" not in sample
+
+
+def test_governance_report_pdf_can_be_downloaded(monkeypatch, tmp_path: Path) -> None:
+    client = build_client(monkeypatch, tmp_path)
+
+    created = client.post("/api/governance/reports", json={"solution": "STA", "days": 7})
+
+    assert created.status_code == 200
+    body = created.json()
+    assert body["success"] is True
+    assert body["download_url"].startswith("/api/governance/reports/")
+    pdf_path = tmp_path / "reports"
+    assert any(pdf_path.glob("*.pdf"))
+
+    downloaded = client.get(body["download_url"])
+    assert downloaded.status_code == 200
+    assert downloaded.headers["content-type"] == "application/pdf"
+    assert 'filename="NeoIASecurity_STA_Relatorio_Executivo_7d.pdf"' in downloaded.headers["content-disposition"]
+    assert downloaded.content.startswith(b"%PDF")
+
+
+def test_clean_model_answer_removes_internal_rag_labels_without_touching_code_blocks() -> None:
+    answer = (
+        "### CONTEXTO LOCAL\n"
+        "**Causa:** falha de MFA\n\n"
+        "```bash\n"
+        "echo '### CONTEXTO LOCAL'\n"
+        "```\n"
+        "Resumo do contexto disponível\n"
+        "- item"
+    )
+
+    cleaned = clean_model_answer(answer)
+
+    assert "### CONTEXTO LOCAL\n**Causa" not in cleaned
+    assert "**Causa:**" in cleaned
+    assert "echo '### CONTEXTO LOCAL'" in cleaned
+    assert "Resumo do contexto disponível" not in cleaned
 
 
 def test_local_doc_resolver_supports_api_repo_and_current_working_directory(
@@ -140,7 +204,7 @@ def test_gridsure_uses_related_token_context_without_inventing_procedure(monkeyp
     ).json()
 
     assert debug["selected_local_chunks"]
-    assert any("No exact GrIDsure procedure" in warning for warning in debug["warnings"])
+    assert any("não contém procedimento específico para GrIDsure" in warning for warning in debug["warnings"])
     assert "Não encontrei um procedimento específico" in chat["answer"]
     assert "informação suficiente" not in chat["answer"]
     assert "Resposta gerada localmente" in chat["answer"]

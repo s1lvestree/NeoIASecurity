@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "2026-06-22T09:02:10+00:00",
+    "user": "user-a2d76c3901",
+    "user_hash": "user-a2d76c3901",
+    "application": "Jira",
+    "action": "access_application",
+    "event_type": "saml_application_access",
+    "status": "accepted",
+    "authentication_method": "SAML",
+    "risk_signal": "ok",
+    "source_ip": "10.3.x.x",
+    "location": "BR-Curitiba",
+    "policy_name": "Acesso SAML SaaS",
+    "reason": "Autenticacao concluida conforme politica.",
+    "device": "Windows laptop"
+  },
+  {
+    "timestamp": "2026-06-18T00:17:55+00:00",
+    "user": "user-d9bcf17742",
+    "user_hash": "user-d9bcf17742",
+    "application": "Zoom",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "denied",
+    "authentication_method": "OTP",
+    "risk_signal": "unusual_location",
+    "source_ip": "10.5.x.x",
+    "location": "NL-Amsterdam",
+    "policy_name": "Step-up por Risco",
+    "reason": "Politica de acesso bloqueou a tentativa.",
+    "device": "Android"
+  },
+  {
+    "timestamp": "2026-06-12T14:26:08+00:00",
+    "user": "user-53ee41b20f",
+    "user_hash": "user-53ee41b20f",
+    "application": "Office 365",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "failed",
+    "authentication_method": "Push OTP",
+    "risk_signal": "repeated_failures",
+    "source_ip": "10.0.x.x",
+    "location": "BR-Sao Paulo",
+    "policy_name": "Bloqueio por Falhas Repetidas",
+    "reason": "Falha no desafio de autenticacao.",
+    "device": "iPhone"
+  }
+]

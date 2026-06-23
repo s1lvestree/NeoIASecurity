@@ -7,12 +7,13 @@ services:
     env_file:
       - apps/api/.env
     environment:
-      GOVERNANCE_REPORT_DIR: /tmp/reports
+      GOVERNANCE_REPORT_DIR: /app/generated_reports
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     volumes:
       - ./apps/api:/app
+      - ./apps/api/generated_reports:/app/generated_reports
     ports:
       - "8000:8000"
     extra_hosts:

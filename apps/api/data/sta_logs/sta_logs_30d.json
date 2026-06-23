@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "2026-06-22T10:48:39+00:00",
+    "user": "user-b8f061e9ac",
+    "user_hash": "user-b8f061e9ac",
+    "application": "ServiceNow",
+    "action": "access_application",
+    "event_type": "saml_application_access",
+    "status": "accepted",
+    "authentication_method": "FIDO2",
+    "risk_signal": "ok",
+    "source_ip": "10.4.x.x",
+    "location": "BR-Sao Paulo",
+    "policy_name": "Aplicacoes Corporativas",
+    "reason": "Autenticacao concluida conforme politica.",
+    "device": "macOS laptop"
+  },
+  {
+    "timestamp": "2026-06-09T05:40:03+00:00",
+    "user": "user-2b6c90e174",
+    "user_hash": "user-2b6c90e174",
+    "application": "Jira",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "denied",
+    "authentication_method": "GrIDsure",
+    "risk_signal": "admin_weak_auth",
+    "source_ip": "10.1.x.x",
+    "location": "CL-Santiago",
+    "policy_name": "MFA Forte para Administradores",
+    "reason": "Politica de acesso bloqueou a tentativa.",
+    "device": "Windows laptop"
+  },
+  {
+    "timestamp": "2026-05-29T19:22:17+00:00",
+    "user": "user-89104fbb67",
+    "user_hash": "user-89104fbb67",
+    "application": "Zoom",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "failed",
+    "authentication_method": "Push OTP",
+    "risk_signal": "push_timeout",
+    "source_ip": "10.2.x.x",
+    "location": "BR-Rio de Janeiro",
+    "policy_name": "Step-up por Risco",
+    "reason": "Falha no desafio de autenticacao.",
+    "device": "iPhone"
+  }
+]

@@ -31,7 +31,8 @@ except ImportError:  # pragma: no cover
 
 INSUFFICIENT_CONTEXT_ANSWER = (
     "Não encontrei informação suficiente na documentação local ou pública carregada neste MVP "
-    "para responder com segurança."
+    "para responder com segurança. Verifique se a documentação STA completa está em "
+    "apps/api/docs/sta.md ou tente uma pergunta mais específica."
 )
 
 SYSTEM_CONTEXT = """
@@ -61,8 +62,24 @@ CONCEPT_ANSWER_STA = (
     "indevido e melhorando a experiência do usuário."
 )
 
-STOPWORDS = {"a", "ao", "como", "da", "de", "do", "e", "em", "o", "os", "para", "por", "que", "um", "uma"}
+STOPWORDS = {
+    "a", "an", "and", "ao", "as", "como", "da", "de", "do", "dos", "e", "em",
+    "for", "how", "in", "is", "o", "of", "os", "para", "por", "que", "the",
+    "to", "um", "uma", "what",
+}
 TROUBLESHOOTING_TERMS = {"erro", "falha", "bloqueado", "timeout", "resolucao", "causa", "verificacoes", "sintoma"}
+PROCEDURAL_TERMS = {
+    "acao", "acoes", "configurar", "delete", "desativar", "disable", "excluir",
+    "gerenciar", "gestao", "management", "passo", "procedure", "procedimento",
+    "remove", "remover", "revoke", "revogar", "revocation", "steps", "token",
+    "unassign", "user", "usuario",
+}
+PUBLIC_MIN_SCORE = 8
+LOCAL_STRONG_SCORE = 35
+INTERNAL_CONTEXT_LINE_RE = re.compile(
+    r"^(?:#{1,6}\s*)?(?:CONTEXTO LOCAL|CONTEXTO P[ÚU]BLICO|Resumo do contexto disponível|Trecho RAG|RAG chunk|Chunk)\s*:?.*$",
+    re.IGNORECASE,
+)
 
 
 def _normalize(value: str) -> str:
@@ -73,8 +90,8 @@ def _normalize(value: str) -> str:
 def classify_question_intent(question: str) -> str:
     normalized = _normalize(question)
     rules = (
+        ("how_to", ("como", "passo a passo", "configurar", "criar", "integrar", "revogar", "revoke", "remover", "remove", "excluir", "delete", "desativar", "disable", "unassign")),
         ("troubleshooting", ("erro", "falha", "nao funciona", "problema", "bloqueado", "desbloquear", "timeout", "nao redireciona")),
-        ("how_to", ("como", "passo a passo", "configurar", "criar", "integrar")),
         ("concept", ("o que e", "explique", "para que serve", "qual e", "quais metodos")),
         ("policy", ("politica", "mfa", "fido", "geolocalizacao", "step-up", "acesso")),
     )
@@ -82,6 +99,27 @@ def classify_question_intent(question: str) -> str:
         if any(term in normalized for term in terms):
             return intent
     return "unknown"
+
+
+def clean_model_answer(answer: str) -> str:
+    if not answer:
+        return ""
+    cleaned_lines: list[str] = []
+    in_code_block = False
+    for raw_line in answer.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+            cleaned_lines.append(raw_line.rstrip())
+            continue
+        if not in_code_block and INTERNAL_CONTEXT_LINE_RE.match(stripped):
+            continue
+        if not in_code_block and re.match(r"^\[?(?:source|fonte|chunk|trecho)\s*[:#-]", stripped, re.IGNORECASE):
+            continue
+        cleaned_lines.append(raw_line.rstrip())
+    cleaned = "\n".join(cleaned_lines)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
 
 
 def _timestamp() -> str:
@@ -92,6 +130,7 @@ class ChatService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.last_bedrock_error: str | None = None
+        self.last_public_doc_error: str | None = None
         self._local_cache_lock = threading.Lock()
         self._local_cache_key: tuple[int, int] | None = None
         self._local_markdown_cache = ""
@@ -115,6 +154,8 @@ class ChatService:
         if self.settings.bedrock_enabled and combined_context.strip():
             try:
                 answer = self._call_bedrock(question, combined_context)
+                if INSUFFICIENT_CONTEXT_ANSWER in answer and combined_context.strip():
+                    answer = self._build_fallback_answer(question, combined_context, intent)
                 mode = "bedrock"
                 fallback_reason = None
                 self.last_bedrock_error = None
@@ -124,12 +165,17 @@ class ChatService:
                 mode = "fallback"
                 fallback_reason = "bedrock_error"
 
+        answer = clean_model_answer(answer)
+
         references = []
         if local_sources:
             references.append("Documentação local")
         if public_sources:
             references.append("Documentação pública")
-        if "STA" in answer or "SafeNet Trusted Access" in answer:
+        normalized_question = _normalize(question)
+        if ("STA" in answer or "SafeNet Trusted Access" in answer) and (
+            "sta" in self._query_terms(question) or "safenet trusted access" in normalized_question
+        ):
             references.append("STA")
 
         return ChatResponse(
@@ -198,17 +244,27 @@ class ChatService:
         normalized = _normalize(question)
         terms = {term for term in re.findall(r"\w+", normalized) if len(term) >= 3 and term not in STOPWORDS}
         if "sta" in terms or "safenet trusted access" in normalized:
-            terms.update({"safenet", "trusted", "access", "mfa", "sso", "policy", "politica"})
-        if "gridsure" in normalized or "grid sure" in normalized:
             terms.update({
-                "grid", "grid sure", "grid pattern", "token", "revogar", "revoke",
-                "revocation", "remove", "delete", "desbloquear", "blocked token",
-                "token blocked",
+                "safenet", "trusted", "access", "trusted access", "mfa", "sso",
+                "access policy", "authentication policy", "policy", "politica",
+                "token", "otp",
+            })
+        if "gridsure" in normalized or "grid sure" in normalized or re.search(r"\bgrid\b", normalized):
+            terms.update({
+                "gridsure", "grid sure", "grid", "pattern", "pattern token", "token",
+                "otp", "credential", "revoke", "revogar", "revocation", "remove",
+                "remover", "delete", "excluir", "bloquear", "desbloquear",
+                "blocked token", "token blocked",
+            })
+        if any(term in normalized for term in ("revogar", "revoke", "remover", "remove", "excluir", "delete")):
+            terms.update({
+                "revoke", "revocation", "remove", "delete", "unassign", "deactivate",
+                "disable", "excluir", "remover", "desativar", "token", "credential",
             })
         if "token" in normalized:
             terms.update({
                 "mobilepass+", "otp", "credential", "revogar", "revoke", "unassign",
-                "remove", "delete", "blocked",
+                "remove", "remover", "delete", "excluir", "blocked", "bloqueado",
             })
         return terms
 
@@ -219,54 +275,114 @@ class ChatService:
             if len(term) >= 3 and term not in STOPWORDS
         }
         lowered_chunk = _normalize(chunk)
-        score = sum(lowered_chunk.count(term) for term in terms)
-        score += 3 * sum(lowered_chunk.count(term) for term in original_terms)
         headings = _normalize("\n".join(
             line.lower() for line in chunk.splitlines() if re.match(r"^#{1,3}\s+", line)
         ))
-        score += sum(3 for term in terms if term in headings)
+        score = 0
+        if "table of contents" in headings:
+            score -= 80
+        for term in terms:
+            if term in {"sta", "access"}:
+                if term in headings:
+                    score += 2
+                elif re.search(rf"\b{re.escape(term)}\b", lowered_chunk):
+                    score += 1
+                continue
+            if " " in term and term in lowered_chunk:
+                score += 10
+            elif term in lowered_chunk:
+                score += lowered_chunk.count(term)
+            if term in headings:
+                score += 8 if " " in term else 4
+        for term in original_terms:
+            if term in {"sta"}:
+                score += 2 if term in headings else (1 if re.search(rf"\b{term}\b", lowered_chunk) else 0)
+                continue
+            if term in headings:
+                score += 6
+            score += 3 * lowered_chunk.count(term)
         if intent == "concept":
             score -= sum(8 for term in TROUBLESHOOTING_TERMS if term in lowered_chunk)
             if "visao geral" in lowered_chunk:
                 score += 12
+            if any(term in _normalize(question) for term in ("metodos", "methods", "autenticacao", "authentication")):
+                score += sum(
+                    18
+                    for term in (
+                        "authentication methods", "mfa methods", "metodos de autenticacao",
+                        "token types", "tokens and mfa", "mfa method", "otp", "push otp",
+                    )
+                    if term in lowered_chunk
+                )
+                score -= sum(8 for term in ("revogar", "revoke", "suspend", "unlock", "troubleshooting") if term in lowered_chunk)
         elif intent == "troubleshooting" and any(term in lowered_chunk for term in TROUBLESHOOTING_TERMS):
             score += 8
+        elif intent == "how_to":
+            score += sum(3 for term in PROCEDURAL_TERMS if term in lowered_chunk)
+            normalized_question = _normalize(question)
+            if "desblo" in normalized_question or "unlock" in normalized_question:
+                score += sum(18 for term in ("desbloquear", "unlock", "locked", "bloqueado") if term in lowered_chunk)
+                if "desbloquear" in headings or "unlock" in headings:
+                    score += 45
+                score -= sum(18 for term in ("revogar", "revoke", "revocation", "gridsure") if term in lowered_chunk)
+            if "gridsure" not in normalized_question and "gridsure" in lowered_chunk:
+                score -= 30
         return score
 
     def _retrieve_local_context(self, question: str, intent: str) -> tuple[str, list[str]]:
         if not self.settings.local_rag_enabled:
             return "", []
-        scored = [
-            (self._score_chunk(question, chunk, intent), chunk)
-            for chunk in self._local_chunks()
-        ]
-        selected = [
-            chunk
-            for score, chunk in sorted(scored, key=lambda item: item[0], reverse=True)
-            if score > 0
-        ][: min(self.settings.local_rag_max_chunks, 3 if intent == "concept" else self.settings.local_rag_max_chunks)]
+        selected = [chunk for _, chunk in self._select_local_chunks(question, intent)]
         context = "\n\n".join(selected)[:10000]
         return (context, [str(self.settings.local_rag_doc_path)]) if context else ("", [])
+
+    def _rank_local_chunks(self, question: str, intent: str) -> list[tuple[int, str]]:
+        return sorted(
+            ((self._score_chunk(question, chunk, intent), chunk) for chunk in self._local_chunks()),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+
+    def _select_local_chunks(self, question: str, intent: str) -> list[tuple[int, str]]:
+        limit = min(self.settings.local_rag_max_chunks, 3 if intent == "concept" else self.settings.local_rag_max_chunks)
+        return [(score, chunk) for score, chunk in self._rank_local_chunks(question, intent) if score > 0][:limit]
+
+    def _local_context_is_weak(self, question: str, intent: str, selected: list[tuple[int, str]]) -> bool:
+        if not selected:
+            return True
+        best_score = selected[0][0]
+        normalized_question = _normalize(question)
+        selected_text = _normalize("\n\n".join(chunk for _, chunk in selected))
+        if "gridsure" in normalized_question and "gridsure" not in selected_text:
+            return True
+        if any(term in normalized_question for term in ("revogar", "revoke", "remover", "remove", "excluir", "delete")):
+            if not any(term in selected_text for term in ("revogar", "revoke", "revocation", "remove", "remover", "delete", "excluir")):
+                return True
+        return best_score < LOCAL_STRONG_SCORE and intent in {"how_to", "troubleshooting", "unknown"}
 
     def _is_allowed_url(self, url: str) -> bool:
         requested_host = (urlparse(url).hostname or "").lower()
         allowed_hosts = {(urlparse(item).hostname or "").lower() for item in self.settings.public_doc_urls}
         return bool(requested_host) and requested_host in allowed_hosts
 
-    def _fetch_public_doc_text(self, url: str) -> str:
+    def _fetch_public_doc_page(self, url: str) -> tuple[str, str | None]:
         if not self._is_allowed_url(url):
-            return ""
+            return "", "url_not_allowlisted"
         now = time.monotonic()
         with self._public_cache_lock:
             cached = self._public_cache.get(url)
             if cached and now - cached[0] < self.settings.public_doc_cache_ttl_seconds:
-                return cached[1]
+                return cached[1], None
         try:
             response = requests.get(url, timeout=self.settings.public_doc_timeout_seconds, headers={"User-Agent": "NeoIA-API/1.0"})
-        except requests.RequestException:
-            return ""
+        except requests.Timeout:
+            return "", "timeout"
+        except requests.SSLError:
+            return "", "ssl_error"
+        except requests.RequestException as exc:
+            return "", self._sanitize_error(exc)
         if response.status_code != 200:
-            return ""
+            return "", f"http_{response.status_code}"
         soup = BeautifulSoup(response.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
@@ -274,26 +390,43 @@ class ChatService:
         text = text[:8000]
         with self._public_cache_lock:
             self._public_cache[url] = (now, text)
+        return text, None
+
+    def _fetch_public_doc_text(self, url: str) -> str:
+        text, _ = self._fetch_public_doc_page(url)
         return text
 
     def _retrieve_public_context(self, question: str, intent: str) -> tuple[str, list[str]]:
+        context, sources, _, _ = self._retrieve_public_context_detailed(question, intent)
+        return context, sources
+
+    def _retrieve_public_context_detailed(
+        self, question: str, intent: str
+    ) -> tuple[str, list[str], list[str], list[str]]:
         if not self.settings.public_doc_lookup_enabled:
-            return "", []
+            return "", [], [], []
         relevant_pages: list[tuple[int, str, str]] = []
         limit = min(self.settings.public_doc_max_urls, self.settings.public_doc_max_urls_per_query)
         urls = self.settings.public_doc_urls[:limit]
+        attempted: list[str] = []
+        errors: list[str] = []
         if urls:
             with ThreadPoolExecutor(max_workers=len(urls), thread_name_prefix="public-doc") as executor:
-                futures = {executor.submit(self._fetch_public_doc_text, url): url for url in urls}
+                futures = {executor.submit(self._fetch_public_doc_page, url): url for url in urls}
                 for future in as_completed(futures):
                     url = futures[future]
+                    attempted.append(url)
                     try:
-                        text = future.result()
-                    except Exception:
+                        text, error = future.result()
+                    except Exception as exc:
                         text = ""
+                        error = self._sanitize_error(exc)
+                    if error:
+                        errors.append(f"{url}: {error}")
                     score = self._score_chunk(question, text, intent)
-                    if text and score > 0:
+                    if text and score >= PUBLIC_MIN_SCORE:
                         relevant_pages.append((score, url, text))
+        self.last_public_doc_error = "; ".join(errors[:3]) if errors else None
         context_parts: list[str] = []
         sources: list[str] = []
         used_chars = 0
@@ -305,18 +438,22 @@ class ChatService:
             context_parts.append(f"[source: {url}]\n{selected}")
             sources.append(url)
             used_chars += len(selected)
-        return "\n\n".join(context_parts), sources
+        return "\n\n".join(context_parts), sources, attempted, errors
 
     def _retrieve_combined_context(self, question: str, intent: str) -> tuple[str, list[str], list[str]]:
-        local_context, local_sources = self._retrieve_local_context(question, intent)
+        selected_local = self._select_local_chunks(question, intent) if self.settings.local_rag_enabled else []
+        local_context = "\n\n".join(chunk for _, chunk in selected_local)[:10000]
+        local_sources = [str(self.settings.local_rag_doc_path)] if local_context else []
         public_context, public_sources = "", []
         normalized = _normalize(question)
         needs_external = any(term in normalized for term in ("documentacao oficial", "publica", "versao atual", "mais recente"))
-        if self.settings.public_doc_lookup_enabled and (not local_context or needs_external):
+        local_weak = self._local_context_is_weak(question, intent, selected_local)
+        if self.settings.public_doc_lookup_enabled and (local_weak or needs_external):
             try:
                 public_context, public_sources = self._retrieve_public_context(question, intent)
             except Exception as exc:
-                logger.warning("Public documentation lookup failed: %s", self._sanitize_error(exc))
+                self.last_public_doc_error = self._sanitize_error(exc)
+                logger.warning("Public documentation lookup failed: %s", self.last_public_doc_error)
         parts: list[str] = []
         if local_context:
             parts.append(f"### CONTEXTO LOCAL\n{local_context}")
@@ -379,6 +516,7 @@ class ChatService:
         if not combined_context.strip():
             return INSUFFICIENT_CONTEXT_ANSWER
         normalized = _normalize(question)
+        normalized_context = _normalize(combined_context)
         is_sta = bool(re.search(r"\bsta\b", normalized)) or "safenet trusted access" in normalized
         if intent == "concept" and "metodos" in normalized and is_sta:
             return (
@@ -388,7 +526,25 @@ class ChatService:
             )
         if intent == "concept" and is_sta:
             return f"{CONCEPT_ANSWER_STA}\n\nResposta gerada localmente com base na documentação carregada."
-        if "gridsure" in normalized and "token" in _normalize(combined_context):
+        if "gridsure" in normalized and "token" in normalized_context and any(
+            term in normalized for term in ("revogar", "revoke", "remover", "remove", "excluir", "delete")
+        ):
+            if "revogar token gridsure" in normalized_context or (
+                "gridsure" in normalized_context and "revoke" in normalized_context
+            ):
+                return (
+                    "O contexto carregado contém um procedimento para revogar token GrIDsure.\n\n"
+                    "Passos principais\n"
+                    "1. Acesse o STA Token Management Console com permissões de operador.\n"
+                    "2. Localize o usuário e selecione o User ID correspondente.\n"
+                    "3. Abra Authentication Methods para listar os tokens atribuídos.\n"
+                    "4. No token GrIDsure, selecione Manage.\n"
+                    "5. Escolha Revoke e confirme a revogação.\n\n"
+                    "Resultado esperado: o token GrIDsure é removido do usuário, retorna ao "
+                    "inventário disponível e o evento Token Revoked aparece nos audit logs.\n\n"
+                    "Resposta gerada com base na documentação carregada."
+                )
+        if "gridsure" in normalized and "token" in normalized_context:
             if intent == "concept":
                 return (
                     "Não encontrei uma definição específica de GrIDsure no contexto carregado. "
@@ -481,13 +637,7 @@ class ChatService:
         doc_exists = doc_path.is_file()
         doc_size = doc_path.stat().st_size if doc_exists else 0
         chunks = self._local_chunks() if self.settings.local_rag_enabled and doc_exists else []
-        ranked = sorted(
-            ((self._score_chunk(question, chunk, intent), chunk) for chunk in chunks),
-            key=lambda item: item[0], reverse=True,
-        )
-        selected = [(score, chunk) for score, chunk in ranked if score > 0][
-            : min(self.settings.local_rag_max_chunks, 3 if intent == "concept" else self.settings.local_rag_max_chunks)
-        ]
+        selected = self._select_local_chunks(question, intent) if chunks else []
         local_rag_ms = round((time.perf_counter() - local_started) * 1000, 2)
         if not self.settings.local_rag_enabled:
             warnings.append("Local RAG is disabled.")
@@ -496,56 +646,107 @@ class ChatService:
         elif not selected:
             warnings.append("No relevant local chunks were selected.")
         elif "gridsure" in _normalize(question) and not any("gridsure" in _normalize(chunk) for _, chunk in selected):
-            warnings.append("No exact GrIDsure procedure was found; selected chunks contain related token management content.")
+            warnings.append("A documentação local foi carregada, mas não contém procedimento específico para GrIDsure/revogação.")
 
         public_started = time.perf_counter()
-        public_context, public_sources = "", []
+        public_context, public_sources, public_attempted, public_errors = "", [], [], []
         normalized = _normalize(question)
         needs_external = any(term in normalized for term in ("documentacao oficial", "publica", "versao atual", "mais recente"))
-        if self.settings.public_doc_lookup_enabled and (not selected or needs_external):
+        local_weak = self._local_context_is_weak(question, intent, selected)
+        if self.settings.public_doc_lookup_enabled and (local_weak or needs_external):
             try:
-                public_context, public_sources = self._retrieve_public_context(question, intent)
+                public_context, public_sources, public_attempted, public_errors = self._retrieve_public_context_detailed(question, intent)
             except Exception as exc:
+                public_errors.append(self._sanitize_error(exc))
                 warnings.append(f"Public documentation lookup failed: {self._sanitize_error(exc)}")
         public_doc_ms = round((time.perf_counter() - public_started) * 1000, 2)
         if self.settings.public_doc_lookup_enabled and public_doc_ms > self.settings.public_doc_timeout_seconds * 1000:
             warnings.append("Public documentation lookup was slow.")
+        if self.settings.public_doc_lookup_enabled and local_weak and not public_attempted:
+            warnings.append("Public documentation lookup was enabled but no public URL was attempted.")
+        if self.settings.public_doc_lookup_enabled and public_attempted and not public_sources:
+            warnings.append("Public documentation lookup ran but no public context passed the relevance threshold.")
         local_length = sum(len(chunk) for _, chunk in selected)
         total_ms = round((time.perf_counter() - started) * 1000, 2)
-        return {
+        selected_local_chunks = [
+            {
+                "heading": self._chunk_heading(chunk),
+                "score": score,
+                "source": "Documentação local",
+                "preview": re.sub(r"\s+", " ", chunk).strip()[:250],
+            }
+            for score, chunk in selected
+        ]
+        result = {
             "question": question,
             "detected_intent": intent,
+            "local": {
+                "enabled": self.settings.local_rag_enabled,
+                "configured_path": self.settings.configured_local_doc_path,
+                "resolved_path": str(doc_path),
+                "exists": doc_exists,
+                "size_bytes": doc_size,
+                "chunks_count": len(chunks),
+                "selected_chunks": selected_local_chunks,
+            },
+            "public": {
+                "enabled": self.settings.public_doc_lookup_enabled,
+                "urls_configured": self.settings.public_doc_urls,
+                "urls_attempted": public_attempted,
+                "selected_sources": public_sources,
+                "errors": public_errors,
+            },
+            "combined_context_length": min(local_length + len(public_context), self.settings.combined_context_max_chars),
+            "timings_ms": {
+                "local_rag": local_rag_ms,
+                "public_docs": public_doc_ms,
+                "total_retrieval": total_ms,
+            },
+            "warnings": warnings,
+            # Backward-compatible aliases for older scripts/tests.
             "local_rag_enabled": self.settings.local_rag_enabled,
             "configured_local_doc_path": self.settings.configured_local_doc_path,
             "resolved_local_doc_path": str(doc_path),
             "local_doc_exists": doc_exists,
             "local_doc_size_bytes": doc_size,
             "local_chunks_count": len(chunks),
-            "selected_local_chunks": [
-                {
-                    "heading": self._chunk_heading(chunk),
-                    "score": score,
-                    "source": str(doc_path),
-                    "preview": re.sub(r"\s+", " ", chunk).strip()[:250],
-                }
-                for score, chunk in selected
-            ],
+            "selected_local_chunks": selected_local_chunks,
             "public_doc_lookup_enabled": self.settings.public_doc_lookup_enabled,
             "selected_public_sources": public_sources,
-            "combined_context_length": min(local_length + len(public_context), self.settings.combined_context_max_chars),
-            "warnings": warnings,
             "local_rag_ms": local_rag_ms,
             "public_doc_ms": public_doc_ms,
             "bedrock_ms": 0.0,
             "total_ms": total_ms,
             "mode": {"bedrock_enabled": self.settings.bedrock_enabled, "expected": "bedrock" if self.settings.bedrock_enabled else "fallback"},
         }
+        return result
 
     def debug_timeout(self, question: str) -> dict:
         path = self.settings.local_rag_doc_path
         exists = path.is_file()
         return {
             "question": question, "detected_intent": classify_question_intent(question),
+            "local": {
+                "enabled": self.settings.local_rag_enabled,
+                "configured_path": self.settings.configured_local_doc_path,
+                "resolved_path": str(path),
+                "exists": exists,
+                "size_bytes": path.stat().st_size if exists else 0,
+                "chunks_count": 0,
+                "selected_chunks": [],
+            },
+            "public": {
+                "enabled": self.settings.public_doc_lookup_enabled,
+                "urls_configured": self.settings.public_doc_urls,
+                "urls_attempted": [],
+                "selected_sources": [],
+                "errors": ["retrieval_timeout"],
+            },
+            "timings_ms": {
+                "local_rag": 0.0,
+                "public_docs": 0.0,
+                "total_retrieval": self.settings.chat_request_timeout_seconds * 1000,
+            },
             "local_rag_enabled": self.settings.local_rag_enabled,
             "configured_local_doc_path": self.settings.configured_local_doc_path,
             "resolved_local_doc_path": str(path), "local_doc_exists": exists,

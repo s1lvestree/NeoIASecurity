@@ -34,23 +34,26 @@ load_dotenv(REPO_ROOT / ".env")
 load_dotenv(API_ROOT / ".env")
 
 
-def resolve_local_doc_path(path: str) -> Path:
-    """Resolve a document path consistently in local and container executions.
-
-    Existing files win in this order: repository root, API root, then the current
-    working directory. A repository-style ``apps/api/...`` path is also mapped to
-    the API root because the Docker image copies ``apps/api`` directly to ``/app``.
-    If nothing exists, the repository-root candidate is returned for diagnostics.
-    """
-    raw_path = path.strip()
+def resolve_local_doc_path(configured_path: str) -> Path:
+    """Resolve the STA RAG document in local and Docker executions."""
+    raw_path = (configured_path or "apps/api/docs/sta.md").strip()
     candidate = Path(raw_path).expanduser()
     if candidate.is_absolute():
         return candidate.resolve()
 
-    candidates = [REPO_ROOT / candidate, API_ROOT / candidate, Path.cwd() / candidate]
+    candidates = [
+        Path.cwd() / candidate,
+        REPO_ROOT / candidate,
+        API_ROOT / candidate,
+        Path("/app") / candidate,
+        Path("/app/docs/sta.md"),
+        REPO_ROOT / "apps/api/docs/sta.md",
+    ]
+
     parts = candidate.parts
     if len(parts) >= 2 and parts[:2] == ("apps", "api"):
-        candidates.insert(1, API_ROOT.joinpath(*parts[2:]))
+        candidates.insert(3, API_ROOT.joinpath(*parts[2:]))
+        candidates.insert(4, Path("/app").joinpath(*parts[2:]))
 
     unique_candidates: list[Path] = []
     for item in candidates:
@@ -198,8 +201,8 @@ def get_settings() -> Settings:
         octadesk_access_token=os.getenv("OCTADESK_ACCESS_TOKEN", "").strip(),
         octadesk_agent_email=os.getenv("OCTADESK_AGENT_EMAIL", "").strip(),
         octadesk_requester_email=os.getenv("OCTADESK_REQUESTER_EMAIL", "").strip(),
-        governance_log_dir=_resolve_path(os.getenv("GOVERNANCE_LOG_DIR", "../streamlit/data/sta_logs_fake")),
-        governance_report_dir=_resolve_path(os.getenv("GOVERNANCE_REPORT_DIR", "reports")),
+        governance_log_dir=_resolve_path(os.getenv("GOVERNANCE_LOG_DIR", "data/sta_logs")),
+        governance_report_dir=_resolve_path(os.getenv("GOVERNANCE_REPORT_DIR", "generated_reports")),
         governance_default_days=env_int("GOVERNANCE_DEFAULT_DAYS", 7),
         governance_default_log_count=env_int("GOVERNANCE_DEFAULT_LOG_COUNT", 500),
         governance_use_fake_sta_api=env_bool("GOVERNANCE_USE_FAKE_STA_API", True),

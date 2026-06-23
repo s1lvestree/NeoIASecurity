@@ -13,3 +13,6 @@ node_modules/
 apps/web/node_modules/
 apps/web/dist/
 apps/api/.mypy_cache/
+apps/api/generated_reports/
+generated_reports/
+*.pdf

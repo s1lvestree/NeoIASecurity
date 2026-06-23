@@ -8,7 +8,8 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { useGovernance } from '../hooks/useGovernance';
-import type { GovernanceReport } from '../types/governance';
+import type { GovernanceReportJob } from '../types/governance';
+import { httpClient } from '../services/httpClient';
 
 function StateBadge({ state }: { state: string }) {
   const base = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
@@ -48,34 +49,136 @@ function MetricSkeleton() {
   );
 }
 
-function ReportModal({ markdown, onClose }: { markdown: string; onClose: () => void }) {
+function buildDownloadUrl(downloadUrl: string) {
+  if (/^https?:\/\//i.test(downloadUrl)) return downloadUrl;
+  return `${httpClient.baseUrl}${downloadUrl}`;
+}
+
+function ReportExportModal({
+  onClose,
+  onGenerate,
+}: {
+  onClose: () => void;
+  onGenerate: (days: number) => Promise<GovernanceReportJob | null>;
+}) {
+  const [daysPreset, setDaysPreset] = useState<'7' | '15' | '30' | 'custom'>('7');
+  const [customDays, setCustomDays] = useState(45);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<GovernanceReportJob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedDays = daysPreset === 'custom' ? customDays : Number(daysPreset);
+  const handleGenerate = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const generated = await onGenerate(selectedDays);
+      if (generated) setResult(generated);
+      else setError('A API não retornou os dados do relatório.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha inesperada ao gerar relatório.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-card shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-xl flex-col rounded-xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h3 className="text-sm font-semibold text-foreground">Relatório Executivo de Governança</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Exportar Governança IA</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Buscar logs STA dos últimos {selectedDays} dias</p>
+          </div>
           <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6">
-          <pre className="font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">{markdown}</pre>
+        <div className="flex-1 space-y-5 overflow-y-auto p-6">
+          <div>
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Solução
+            </label>
+            <select
+              value="STA"
+              disabled
+              className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground"
+            >
+              <option value="STA">STA - SafeNet Trusted Access</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Período
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {(['7', '15', '30', 'custom'] as const).map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setDaysPreset(period)}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    daysPreset === period
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-muted/20 text-foreground hover:bg-muted/40'
+                  }`}
+                >
+                  {period === 'custom' ? 'Custom' : `${period} dias`}
+                </button>
+              ))}
+            </div>
+            {daysPreset === 'custom' && (
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={customDays}
+                onChange={(event) => setCustomDays(Number(event.target.value))}
+                className="mt-3 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground"
+              />
+            )}
+          </div>
+
+          {loading && (
+            <div className="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
+              Gerando relatório executivo...
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+              <p className="text-sm font-medium text-emerald-100">Relatório gerado com sucesso.</p>
+              <p className="text-xs text-emerald-100/80">{result.filename}</p>
+              <a
+                href={buildDownloadUrl(result.download_url)}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                <Download className="h-4 w-4" />
+                Baixar PDF
+              </a>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Não foi possível gerar o relatório.
+              <details className="mt-2">
+                <summary className="cursor-pointer font-medium">Detalhes de diagnóstico</summary>
+                <p className="mt-1 text-destructive/90">{error}</p>
+              </details>
+            </div>
+          )}
         </div>
         <div className="flex justify-end border-t border-border px-6 py-4">
           <button
-            onClick={() => {
-              const blob = new Blob([markdown], { type: 'text/markdown' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'relatorio-governanca.md';
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
+            onClick={() => void handleGenerate()}
+            disabled={loading || selectedDays < 1 || selectedDays > 90}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            Baixar .md
+            Gerar relatório PDF
           </button>
         </div>
       </div>
@@ -84,18 +187,10 @@ function ReportModal({ markdown, onClose }: { markdown: string; onClose: () => v
 }
 
 export function GovernancePage() {
-  const { preview, loading, error, fetchReport, refresh } = useGovernance();
-  const [report, setReport] = useState<GovernanceReport | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
+  const { preview, loading, error, createReport, refresh } = useGovernance();
+  const [exportOpen, setExportOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [chartPeriod, setChartPeriod] = useState<'7D' | '30D' | '90D'>('7D');
-
-  const handleExport = async () => {
-    setReportLoading(true);
-    const result = await fetchReport();
-    setReportLoading(false);
-    if (result) setReport(result);
-  };
 
   const analysis = preview?.analysis;
 
@@ -182,7 +277,12 @@ export function GovernancePage() {
 
   return (
     <div className="space-y-6">
-      {report && <ReportModal markdown={report.report_markdown} onClose={() => setReport(null)} />}
+      {exportOpen && (
+        <ReportExportModal
+          onClose={() => setExportOpen(false)}
+          onGenerate={(days) => createReport('STA', days)}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -201,12 +301,11 @@ export function GovernancePage() {
             Atualizar
           </button>
           <button
-            onClick={handleExport}
-            disabled={reportLoading}
+            onClick={() => setExportOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            {reportLoading ? 'Gerando...' : 'Exportar'}
+            Exportar
           </button>
         </div>
       </div>

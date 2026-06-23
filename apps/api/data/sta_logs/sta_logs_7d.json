@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "2026-06-22T08:14:31+00:00",
+    "user": "user-0f83a91c2b",
+    "user_hash": "user-0f83a91c2b",
+    "application": "Office 365",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "accepted",
+    "authentication_method": "FIDO2",
+    "risk_signal": "ok",
+    "source_ip": "10.2.x.x",
+    "location": "BR-Sao Paulo",
+    "policy_name": "MFA Forte para Administradores",
+    "reason": "Autenticacao concluida conforme politica.",
+    "device": "Windows laptop"
+  },
+  {
+    "timestamp": "2026-06-21T22:39:18+00:00",
+    "user": "user-5b18e6f73a",
+    "user_hash": "user-5b18e6f73a",
+    "application": "ServiceNow",
+    "action": "access_application",
+    "event_type": "saml_application_access",
+    "status": "failed",
+    "authentication_method": "Push OTP",
+    "risk_signal": "push_timeout",
+    "source_ip": "10.4.x.x",
+    "location": "BR-Rio de Janeiro",
+    "policy_name": "Step-up por Risco",
+    "reason": "Falha no desafio de autenticacao.",
+    "device": "iPhone"
+  },
+  {
+    "timestamp": "2026-06-20T03:11:44+00:00",
+    "user": "user-c7018ac92d",
+    "user_hash": "user-c7018ac92d",
+    "application": "AWS Console",
+    "action": "authenticate",
+    "event_type": "authentication",
+    "status": "denied",
+    "authentication_method": "Password",
+    "risk_signal": "admin_weak_auth",
+    "source_ip": "10.1.x.x",
+    "location": "US-Ashburn",
+    "policy_name": "MFA Forte para Administradores",
+    "reason": "Politica de acesso bloqueou a tentativa.",
+    "device": "macOS laptop"
+  }
+]

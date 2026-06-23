@@ -36,6 +36,17 @@ export interface GovernanceRecommendation {
 }
 
 export interface GovernancePreview {
+  solution?: string;
+  days?: number;
+  total_events?: number;
+  authentications?: number;
+  access_denied?: number;
+  success_rate?: number;
+  unique_users?: number;
+  events_by_day?: { date: string; events: number }[];
+  status_distribution?: { status: string; count: number }[];
+  top_risks?: { risk_signal: string; count: number }[];
+  recent_events?: Record<string, unknown>[];
   metadata: Record<string, string | number>;
   analysis: GovernanceAnalysis;
   preview_rows: GovernancePreviewRow[];
@@ -48,4 +59,12 @@ export interface GovernancePreview {
 export interface GovernanceReport extends GovernancePreview {
   report_markdown: string;
   mode: string;
+}
+
+export interface GovernanceReportJob {
+  success: boolean;
+  report_id: string;
+  filename: string;
+  download_url: string;
+  summary: GovernancePreview;
 }

@@ -1,14 +1,18 @@
-import type { GovernancePreview, GovernanceReport } from '../types/governance';
+import type { GovernancePreview, GovernanceReport, GovernanceReportJob } from '../types/governance';
 import { httpClient } from './httpClient';
 
-const PREVIEW_PATH = '/api/governance/preview';
-const REPORT_PATH = '/api/governance/report';
+const SUMMARY_PATH = '/api/governance/sta/summary';
+const REPORTS_PATH = '/api/governance/reports';
 
 export const governanceService = {
   fetchPreview(days = 7, eventsPerDay = 50): Promise<GovernancePreview> {
-    return httpClient.post<GovernancePreview>(PREVIEW_PATH, { days, events_per_day: eventsPerDay });
+    void eventsPerDay;
+    return httpClient.get<GovernancePreview>(`${SUMMARY_PATH}?days=${days}`);
   },
   fetchReport(days = 7, eventsPerDay = 50): Promise<GovernanceReport> {
-    return httpClient.post<GovernanceReport>(REPORT_PATH, { days, events_per_day: eventsPerDay });
+    return httpClient.post<GovernanceReport>('/api/governance/report', { days, events_per_day: eventsPerDay });
+  },
+  createReport(solution = 'STA', days = 7): Promise<GovernanceReportJob> {
+    return httpClient.post<GovernanceReportJob>(REPORTS_PATH, { solution, days });
   },
 };

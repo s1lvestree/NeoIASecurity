@@ -67,6 +67,55 @@ sessionStorage.clear()
 Em falhas de conexao, confirme que a API responde ao `/health`, que o frontend usa
 `/api/chat` e que o alvo do proxy corresponde ao modo local ou Docker descrito acima.
 
+## Governança IA e exportação PDF
+
+O dashboard **Governança IA** usa uma simulação local de logs do SafeNet Trusted
+Access para demonstrar correlação executiva de eventos. Para gerar o relatório:
+
+1. Abra **Governança IA** no frontend.
+2. Clique em **Exportar**.
+3. Selecione **STA** e o período desejado: 7, 15, 30 dias ou customizado.
+4. Clique em **Gerar relatório PDF**.
+5. Após a mensagem de sucesso, clique em **Baixar PDF**.
+
+Endpoints relacionados:
+
+```bash
+curl "http://localhost:8000/api/governance/sta/summary?days=7"
+curl -X POST "http://localhost:8000/api/governance/reports" \
+  -H "Content-Type: application/json" \
+  -d '{"solution":"STA","days":7}'
+curl "http://localhost:8000/api/governance/debug/sta?days=7"
+```
+
+Os logs STA fake são gerados de forma determinística em runtime pelo backend, como
+se fossem retornados por uma API de auditoria do STA. A fonte local fica documentada
+em `apps/api/data/sta_logs/`. Os dados são fictícios e incluem autenticações bem
+sucedidas, falhas de Push OTP, acessos negados, falhas repetidas, administradores
+com MFA fraco, localização incomum e acessos SAML/OIDC a aplicações como ServiceNow,
+Jira, Zoom e Office 365.
+
+Privacidade do relatório:
+
+- Apenas métricas agregadas e amostras sanitizadas são usadas.
+- Usuários são pseudonimizados e IPs são mascarados.
+- Identificadores como tenant, account e session não são incluídos no payload final.
+- Nenhum log bruto de cliente é enviado para IA.
+
+Os PDFs gerados ficam fora do git em `apps/api/generated_reports/`. No Docker Compose,
+o diretório é montado em `/app/generated_reports`.
+
+Solução de problemas:
+
+- Relatório não baixa: confirme se o backend está no ar e teste o `download_url`
+  retornado por `/api/governance/reports`.
+- Permissão em `generated_reports`: crie o diretório local e garanta escrita pelo
+  usuário/container que executa a API.
+- `ReportLab` ou `matplotlib` ausente: rode `pip install -r apps/api/requirements.txt`
+  e confirme `python -c "import reportlab, matplotlib"`.
+- Volume Docker: confirme `./apps/api/generated_reports:/app/generated_reports` em
+  `docker-compose.yml` e recrie o container com `docker compose up --build`.
+
 ## Integração com Zammad
 
 O Zammad deve estar em execução em `http://localhost:8080`. Crie um token para um
@@ -178,6 +227,43 @@ O `/health` e o endpoint de debug mostram o caminho configurado, o caminho resol
 existência e tamanho do documento sem retornar o documento completo. O `.env` pode ser
 inspecionado localmente para diagnóstico, mas nunca deve ser commitado nem ter tokens,
 senhas ou credenciais copiados para logs, interface ou README.
+
+### Quando a IA não encontra resposta na documentação
+
+Use esta sequência para diagnosticar respostas como "não encontrei informação
+suficiente":
+
+```bash
+curl http://localhost:8000/health
+curl "http://localhost:8000/api/debug/rag?question=Como%20revogar%20um%20token%20GrIDsure%3F"
+python apps/api/scripts/check_rag_setup.py
+```
+
+No Docker, valide o caminho visto pelo container:
+
+```bash
+docker compose exec api python scripts/check_runtime_paths.py
+```
+
+Se o container estiver executando a partir da raiz do repositório em vez de `/app`,
+use:
+
+```bash
+docker compose exec api python apps/api/scripts/check_runtime_paths.py
+```
+
+Verifique:
+
+- `LOCAL_RAG_DOC_PATH=apps/api/docs/sta.md`.
+- O arquivo `apps/api/docs/sta.md` existe e tem tamanho compatível com a documentação completa.
+- `/health` mostra `local_doc_exists=true`.
+- `/api/debug/rag` mostra chunks locais selecionados, URLs públicas tentadas quando o contexto local é fraco e warnings claros quando falta conteúdo específico.
+- `PUBLIC_DOC_LOOKUP_ENABLED=true`.
+- `PUBLIC_DOC_URLS` contém apenas URLs públicas permitidas.
+
+Diferença de paths: localmente o arquivo vive em `apps/api/docs/sta.md`; dentro do
+container da API, `COPY apps/api/ .` e o bind mount `./apps/api:/app` fazem o mesmo
+arquivo aparecer como `/app/docs/sta.md`. O resolver aceita ambos.
 
 ## Streamlit legado
 
