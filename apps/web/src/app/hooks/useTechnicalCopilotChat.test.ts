@@ -23,6 +23,10 @@ class MemoryConversationRepository implements ConversationRepository {
   delete(conversationId: string) {
     this.conversations = this.conversations.filter(({ id }) => id !== conversationId);
   }
+
+  clear() {
+    this.conversations = [];
+  }
 }
 
 const healthService: HealthService = {
@@ -41,6 +45,24 @@ function assistantMessage(content = 'Resposta da IA'): ChatMessage {
 }
 
 describe('useTechnicalCopilotChat', () => {
+  it('limpa todas as conversas e restaura somente a saudacao inicial', () => {
+    const repository = new MemoryConversationRepository();
+    repository.conversations = [{
+      id: 'old', title: 'Antiga', preview: 'Antiga',
+      createdAt: '2026-06-20T10:00:00.000Z', updatedAt: '2026-06-20T10:00:00.000Z', messages: [],
+    }];
+    const { result } = renderHook(() => useTechnicalCopilotChat({
+      repository, chatService: { sendMessage: vi.fn() }, healthService,
+    }));
+
+    act(() => result.current.clearConversation());
+
+    expect(result.current.conversations).toEqual([]);
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].role).toBe('assistant');
+    expect(repository.conversations).toEqual([]);
+  });
+
   it('emite um novo reset a cada solicitacao de nova conversa', () => {
     const repository = new MemoryConversationRepository();
     const chatService: ChatService = { sendMessage: vi.fn() };

@@ -87,6 +87,9 @@ export async function httpRequest<TResponse>(
       },
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError('A consulta excedeu o tempo limite configurado.', { details: 'timeout' });
+    }
     throw new ApiError(
       `Nao foi possivel conectar a API do copiloto tecnico em ${apiBaseUrl}. Verifique se o backend Python esta no ar e se VITE_API_BASE_URL esta correto.`,
       { details: error },

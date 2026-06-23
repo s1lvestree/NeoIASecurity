@@ -1,7 +1,10 @@
 import type { ChatMessage, ChatResponseMode, ChatRole } from '../types/chat';
 import { httpClient } from './httpClient';
 
-const DEFAULT_CHAT_PATH = '/api/technical-copilot/chat';
+const DEFAULT_CHAT_PATH = '/api/chat';
+// Allow the backend's 60-second guard to return its controlled fallback first.
+const CHAT_TIMEOUT_MS = 65_000;
+const INTERNAL_LABELS = /^(?:#{1,3}\s*)?(?:CONTEXTO LOCAL|CONTEXTO P[ÚU]BLICO|Resumo do contexto disponível)\s*:?.*$/gim;
 
 function getChatPath() {
   return import.meta.env.VITE_TECHNICAL_COPILOT_CHAT_PATH?.trim() || DEFAULT_CHAT_PATH;
@@ -45,7 +48,7 @@ function readMessageContent(payload: Record<string, unknown>) {
     (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0,
   );
 
-  return content?.trim();
+  return content?.replace(INTERNAL_LABELS, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function toChatMessage(payload: Record<string, unknown>, fallbackRole: ChatRole = 'assistant') {
@@ -128,13 +131,18 @@ export interface ChatService {
 
 export const apiChatService: ChatService = {
   async sendMessage(input) {
-    const payload = await httpClient.post<unknown>(getChatPath(), {
-      conversation_id: input.conversationId,
-      conversationId: input.conversationId,
-      content: input.content,
-      message: input.content,
-    });
-
-    return extractAssistantMessage(payload);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+    try {
+      const payload = await httpClient.post<unknown>(getChatPath(), {
+        conversation_id: input.conversationId,
+        conversationId: input.conversationId,
+        content: input.content,
+        message: input.content,
+      }, { signal: controller.signal });
+      return extractAssistantMessage(payload);
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   },
 };

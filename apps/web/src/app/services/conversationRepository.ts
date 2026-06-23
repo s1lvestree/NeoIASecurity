@@ -1,9 +1,10 @@
 import type { ChatConversation, ChatMessage } from '../types/chat';
 
-export const LOCAL_STORAGE_CONVERSATIONS_KEY = 'neoia.technicalCopilot.v1';
-const STORAGE_VERSION = 1;
+export const LOCAL_STORAGE_CONVERSATIONS_KEY = 'neoia.chat.v2.conversations';
+const STORAGE_VERSION = 2;
+const LEGACY_STORAGE_KEYS = ['neoia.technicalCopilot.v1', 'neoia.chat.conversations'];
 
-type StorageAdapter = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageAdapter = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 interface StoredConversations {
   version: typeof STORAGE_VERSION;
@@ -14,6 +15,7 @@ export interface ConversationRepository {
   list(): ChatConversation[];
   save(conversation: ChatConversation): void;
   delete(conversationId: string): void;
+  clear(): void;
 }
 
 function isMessage(value: unknown): value is ChatMessage {
@@ -55,7 +57,10 @@ function sortByRecent(conversations: ChatConversation[]) {
 }
 
 export class LocalStorageConversationRepository implements ConversationRepository {
-  constructor(private readonly storage: StorageAdapter = window.localStorage) {}
+  constructor(
+    private readonly storage: StorageAdapter = window.localStorage,
+    private readonly sessionStorage: StorageAdapter | null = window.sessionStorage,
+  ) {}
 
   list() {
     const rawValue = this.storage.getItem(LOCAL_STORAGE_CONVERSATIONS_KEY);
@@ -91,6 +96,13 @@ export class LocalStorageConversationRepository implements ConversationRepositor
 
   delete(conversationId: string) {
     this.write(this.list().filter(({ id }) => id !== conversationId));
+  }
+
+  clear() {
+    for (const key of [LOCAL_STORAGE_CONVERSATIONS_KEY, ...LEGACY_STORAGE_KEYS]) {
+      this.storage.removeItem(key);
+      this.sessionStorage?.removeItem(key);
+    }
   }
 
   private write(conversations: ChatConversation[]) {

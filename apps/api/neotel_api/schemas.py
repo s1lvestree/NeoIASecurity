@@ -33,6 +33,8 @@ class ChatResponse(BaseModel):
     content: str
     timestamp: str
     mode: str
+    intent: str = "unknown"
+    fallback_reason: str | None = None
     local_sources: list[str] = Field(default_factory=list)
     public_sources: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
@@ -49,6 +51,11 @@ class ConversationSummary(BaseModel):
 
 class TicketTestRequest(BaseModel):
     dry_run: bool = True
+
+
+class TicketFromChatRequest(BaseModel):
+    question: str | None = None
+    answer: str | None = None
 
 
 class TicketTestResponse(BaseModel):

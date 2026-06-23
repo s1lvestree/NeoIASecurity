@@ -26,6 +26,7 @@ export function TechnicalCopilotPage() {
           isSubmitting={copilot.isSubmitting}
           apiStatus={copilot.apiStatus}
           onClearError={copilot.clearError}
+          onClearConversation={copilot.clearConversation}
           onSubmit={copilot.submitMessage}
           onRetry={copilot.retryMessage}
         />

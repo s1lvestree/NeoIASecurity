@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiChatService, type ChatService } from '../services/chatService';
 import {
   LocalStorageConversationRepository,
@@ -6,6 +6,15 @@ import {
 } from '../services/conversationRepository';
 import { apiHealthService, type HealthService } from '../services/healthService';
 import type { ApiHealthStatus, ChatConversation, ChatMessage } from '../types/chat';
+
+const API_ERROR_MESSAGE = 'Não foi possível obter resposta da API. Verifique se o backend está ativo e tente novamente.';
+const INITIAL_GREETING: ChatMessage = {
+  id: 'assistant-initial-greeting-v2',
+  role: 'assistant',
+  content: 'Olá! Sou o Copiloto Técnico da NeoIA Security. Como posso ajudar?',
+  createdAt: new Date().toISOString(),
+  deliveryStatus: 'sent',
+};
 
 interface CopilotDependencies {
   repository?: ConversationRepository;
@@ -50,6 +59,7 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiStatus, setApiStatus] = useState<ApiHealthStatus>('checking');
   const [editorResetKey, setEditorResetKey] = useState(0);
+  const requestGenerationRef = useRef(0);
 
   useEffect(() => {
     let isCurrent = true;
@@ -87,6 +97,7 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
 
   const requestAnswer = useCallback(
     async (conversation: ChatConversation, userMessage: ChatMessage) => {
+      const requestGeneration = requestGenerationRef.current;
       setIsSubmitting(true);
       setError(null);
 
@@ -95,6 +106,7 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
           conversationId: conversation.id,
           content: userMessage.content,
         });
+        if (requestGeneration !== requestGenerationRef.current) return 'ignored' as const;
         const updatedAt = new Date().toISOString();
         const completedConversation: ChatConversation = {
           ...conversation,
@@ -113,6 +125,8 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
         setApiStatus('online');
         return 'sent' as const;
       } catch (submissionError) {
+        if (requestGeneration !== requestGenerationRef.current) return 'ignored' as const;
+        console.error('Falha na consulta à API do copiloto:', submissionError instanceof Error ? submissionError.name : 'erro desconhecido');
         const updatedAt = new Date().toISOString();
         commitConversation({
           ...conversation,
@@ -124,14 +138,10 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
           ),
         });
         setApiStatus('offline');
-        setError(
-          submissionError instanceof Error
-            ? submissionError.message
-            : 'Falha inesperada ao consultar o copiloto tecnico.',
-        );
+        setError(API_ERROR_MESSAGE);
         return 'failed' as const;
       } finally {
-        setIsSubmitting(false);
+        if (requestGeneration === requestGenerationRef.current) setIsSubmitting(false);
       }
     },
     [commitConversation, services],
@@ -255,18 +265,35 @@ export function useTechnicalCopilotChat(dependencies: CopilotDependencies = {}) 
 
   const clearError = useCallback(() => setError(null), []);
 
+  const clearConversation = useCallback(() => {
+    try {
+      services.repository.clear();
+    } catch {
+      setError('Não foi possível limpar os dados salvos neste navegador.');
+      return;
+    }
+    requestGenerationRef.current += 1;
+    setConversations([]);
+    setActiveConversationId(null);
+    setSearchQuery('');
+    setError(null);
+    setIsSubmitting(false);
+    setEditorResetKey((current) => current + 1);
+  }, [services]);
+
   return {
     activeConversation,
     activeConversationId,
     apiStatus,
     clearError,
+    clearConversation,
     conversations,
     deleteConversation,
     editorResetKey,
     error,
     filteredConversations,
     isSubmitting,
-    messages: activeConversation?.messages ?? [],
+    messages: activeConversation?.messages ?? [INITIAL_GREETING],
     retryMessage,
     searchQuery,
     selectConversation,

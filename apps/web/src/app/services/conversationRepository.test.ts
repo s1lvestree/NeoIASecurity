@@ -51,4 +51,13 @@ describe('LocalStorageConversationRepository', () => {
 
     expect(repository.list()).toEqual([olderConversation]);
   });
+
+  it('limpa o estado atual e ignora chaves legadas', () => {
+    const repository = new LocalStorageConversationRepository(localStorage, sessionStorage);
+    repository.save(olderConversation);
+    localStorage.setItem('neoia.technicalCopilot.v1', 'estado antigo');
+    repository.clear();
+    expect(repository.list()).toEqual([]);
+    expect(localStorage.getItem('neoia.technicalCopilot.v1')).toBeNull();
+  });
 });

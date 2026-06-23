@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Sparkles, Shield } from 'lucide-react';
-import { TechnicalCopilot } from './TechnicalCopilot';
+import { TechnicalCopilotPage } from '../pages/TechnicalCopilotPage';
 import { GovernanceAI } from './GovernanceAI';
 
 export function WorkspaceTabs() {
@@ -40,7 +40,7 @@ export function WorkspaceTabs() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'technical' ? <TechnicalCopilot /> : <GovernanceAI />}
+        {activeTab === 'technical' ? <TechnicalCopilotPage /> : <GovernanceAI />}
       </div>
     </div>
   );

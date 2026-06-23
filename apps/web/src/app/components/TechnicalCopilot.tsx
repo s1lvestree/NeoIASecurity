@@ -4,16 +4,20 @@ import {
   CheckCircle2,
   Database,
   FileText,
+  ExternalLink,
   LoaderCircle,
   Lock,
   RefreshCw,
   Send,
   Shield,
   Sparkles,
+  Trash2,
   WifiOff,
 } from 'lucide-react';
 import { quickActions, suggestedPrompts } from '../data/technicalCopilotMock';
 import type { ApiHealthStatus, ChatMessage } from '../types/chat';
+import { ticketService, type TicketResponse } from '../services/ticketService';
+import { ApiError } from '../services/httpClient';
 
 const quickActionIcons = {
   octadesk: FileText,
@@ -30,6 +34,7 @@ interface TechnicalCopilotProps {
   isSubmitting: boolean;
   apiStatus: ApiHealthStatus;
   onClearError: () => void;
+  onClearConversation: () => void;
   onSubmit: (content: string) => Promise<'sent' | 'failed' | 'ignored'>;
   onRetry: (messageId: string) => Promise<'sent' | 'failed' | 'ignored'>;
 }
@@ -46,6 +51,29 @@ const apiStatusContent = {
   offline: { label: 'API indisponivel', color: 'text-red-300', Icon: WifiOff },
 };
 
+interface TicketError {
+  message: string;
+  diagnostic?: string;
+}
+
+function ticketDiagnostic(error: unknown): string | undefined {
+  if (!(error instanceof ApiError) || !error.details || typeof error.details !== 'object') {
+    return undefined;
+  }
+  const responseBody = error.details as Record<string, unknown>;
+  const detail = responseBody.detail;
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object') {
+    const nestedDetail = (detail as Record<string, unknown>).detail;
+    if (typeof nestedDetail === 'string') return nestedDetail;
+    const structured = detail as Record<string, unknown>;
+    const parts = [structured.message, structured.zammad_error, structured.hint]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    if (parts.length) return parts.join(' ');
+  }
+  return undefined;
+}
+
 export function TechnicalCopilot({
   conversationId,
   editorResetKey,
@@ -54,10 +82,14 @@ export function TechnicalCopilot({
   isSubmitting,
   apiStatus,
   onClearError,
+  onClearConversation,
   onSubmit,
   onRetry,
 }: TechnicalCopilotProps) {
   const [draft, setDraft] = useState('');
+  const [ticketLoadingId, setTicketLoadingId] = useState<string | null>(null);
+  const [ticketResults, setTicketResults] = useState<Record<string, TicketResponse>>({});
+  const [ticketErrors, setTicketErrors] = useState<Record<string, TicketError>>({});
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const status = apiStatusContent[apiStatus];
@@ -65,6 +97,9 @@ export function TechnicalCopilot({
 
   useEffect(() => {
     setDraft('');
+    setTicketLoadingId(null);
+    setTicketResults({});
+    setTicketErrors({});
     editorRef.current?.focus();
   }, [conversationId, editorResetKey]);
 
@@ -82,6 +117,35 @@ export function TechnicalCopilot({
     if (result !== 'ignored') setDraft('');
   };
 
+  const handleCreateTicket = async (message: ChatMessage, messageIndex: number) => {
+    const question = [...messages.slice(0, messageIndex)]
+      .reverse()
+      .find(({ role, deliveryStatus }) => role === 'user' && deliveryStatus === 'sent')?.content;
+    if (!question || ticketLoadingId) return;
+
+    setTicketLoadingId(message.id);
+    setTicketErrors((current) => {
+      const updated = { ...current };
+      delete updated[message.id];
+      return updated;
+    });
+    try {
+      const result = await ticketService.createFromChat(question, message.content);
+      setTicketResults((current) => ({ ...current, [message.id]: result }));
+    } catch (error) {
+      setTicketErrors((current) => ({
+        ...current,
+        [message.id]: {
+          message:
+            'Não foi possível criar o chamado no Zammad. Verifique a integração da plataforma de chamados.',
+          diagnostic: ticketDiagnostic(error),
+        },
+      }));
+    } finally {
+      setTicketLoadingId(null);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-border bg-[linear-gradient(135deg,rgba(14,165,233,0.16),rgba(14,165,233,0.03)_45%,rgba(19,20,26,0.96)_100%)] px-6 py-5">
@@ -97,9 +161,14 @@ export function TechnicalCopilot({
               </p>
             </div>
           </div>
-          <div className={`flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium ${status.color}`}>
-            <StatusIcon className={`h-3.5 w-3.5 ${apiStatus === 'checking' ? 'animate-spin' : ''}`} />
-            {status.label}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClearConversation} className="flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+              <Trash2 className="h-3.5 w-3.5" /> Limpar conversa
+            </button>
+            <div className={`flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-2 text-xs font-medium ${status.color}`}>
+              <StatusIcon className={`h-3.5 w-3.5 ${apiStatus === 'checking' ? 'animate-spin' : ''}`} />
+              {status.label}
+            </div>
           </div>
         </div>
       </div>
@@ -122,7 +191,7 @@ export function TechnicalCopilot({
           </div>
         )}
 
-        {messages.map((message) => (
+        {messages.map((message, messageIndex) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[80%] rounded-3xl p-5 ${
@@ -143,14 +212,72 @@ export function TechnicalCopilot({
                 </div>
               )}
 
+              {message.role === 'assistant' &&
+                messages.slice(0, messageIndex).some(({ role }) => role === 'user') && (
+                  <div className="mt-4 border-t border-border/50 pt-4">
+                    {!ticketResults[message.id] && (
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateTicket(message, messageIndex)}
+                        disabled={ticketLoadingId !== null}
+                        className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {ticketLoadingId === message.id && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                        Não resolveu - abrir chamado
+                      </button>
+                    )}
+                    {ticketResults[message.id] && (
+                      <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                        <p className="font-medium">Chamado criado com sucesso no Zammad.</p>
+                        <p>Número do chamado: {ticketResults[message.id].ticket_number ?? 'não informado'}</p>
+                        <p>ID do chamado: {ticketResults[message.id].ticket_id ?? 'não informado'}</p>
+                        {ticketResults[message.id].customer_email && (
+                          <p>Cliente: {ticketResults[message.id].customer_email}</p>
+                        )}
+                        {ticketResults[message.id].created_customer && (
+                          <p>Cliente criado automaticamente no Zammad.</p>
+                        )}
+                        {ticketResults[message.id].ticket_url && (
+                          <a
+                            href={ticketResults[message.id].ticket_url!}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 font-medium underline"
+                          >
+                            Abrir no Zammad <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {ticketResults[message.id].email_notification?.warning && (
+                          <p className="text-amber-200">O chamado foi criado, mas uma notificação por e-mail falhou.</p>
+                        )}
+                      </div>
+                    )}
+                    {ticketErrors[message.id] && (
+                      <div className="mt-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                        <p>{ticketErrors[message.id].message}</p>
+                        {ticketErrors[message.id].diagnostic && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer font-medium">Detalhes de diagnóstico</summary>
+                            <p className="mt-1 text-red-100/80">
+                              {ticketErrors[message.id].diagnostic}
+                            </p>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
               <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <span>{formatTime(message.createdAt)}</span>
-                  {message.mode && (
-                    <span className="rounded-full border border-border px-2 py-0.5 uppercase tracking-wide">
-                      {message.mode}
-                    </span>
+                  {message.mode === 'fallback' && (
+                    <details className="relative">
+                      <summary className="cursor-pointer list-none rounded-full border border-border px-2 py-0.5">Detalhes técnicos</summary>
+                      <span className="absolute bottom-6 left-0 z-10 whitespace-nowrap rounded-lg border border-border bg-background px-3 py-2 shadow-lg">Resposta local</span>
+                    </details>
                   )}
+                  {message.mode === 'bedrock' && <span className="rounded-full border border-border px-2 py-0.5">Bedrock</span>}
                   {message.deliveryStatus === 'pending' && (
                     <span className="flex items-center gap-1 text-amber-300">
                       <LoaderCircle className="h-3 w-3 animate-spin" /> Enviando
